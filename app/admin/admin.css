@@ -1,0 +1,487 @@
+/* Admin styles. Uses the tokens and the .field / .qty / .cta primitives that
+   globals.css already defines, so the working screens sit in the same visual
+   world as the customer page without restating any of it.
+
+   Laid out phone-first throughout: this is used standing in a kitchen, and it
+   has to work for Gowri on a handset, not only on a desk. */
+
+.ad-boot {
+  padding: 60px 18px;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* ---------------- login ---------------- */
+
+.ad-login {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 18px;
+  background: var(--green);
+}
+.ad-login-box {
+  width: 100%;
+  max-width: 340px;
+  background: var(--card);
+  border-radius: var(--r);
+  padding: 30px 22px 26px;
+}
+.ad-login-mark {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--green);
+  text-align: center;
+  line-height: 1;
+}
+.ad-login-sub {
+  text-align: center;
+  font-size: 11.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 8px 0 24px;
+}
+
+/* ---------------- chrome ---------------- */
+
+.ad-top {
+  background: var(--green);
+  color: var(--cream);
+  padding: 15px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ad-brand { display: flex; align-items: baseline; gap: 9px; }
+.ad-mark {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+}
+.ad-tag {
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--mustard);
+}
+.ad-signout {
+  background: none;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  color: var(--cream);
+  border-radius: var(--r-s);
+  padding: 7px 13px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.ad-signout:hover { border-color: var(--mustard); color: var(--mustard); }
+
+.ad-wrap {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 0 18px 64px;
+}
+
+.ad-section { margin-top: 26px; }
+.ad-h {
+  font-size: 13px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-weight: 600;
+  margin-bottom: 11px;
+}
+
+.ad-err {
+  margin-top: 12px;
+  background: #f6e3de;
+  color: var(--danger);
+  border-radius: var(--r-s);
+  padding: 11px 13px;
+  font-size: 14px;
+}
+
+/* ---------------- date picker ---------------- */
+
+.ad-dates { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.ad-date {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 66px;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 9px 8px 8px;
+  text-align: center;
+  cursor: pointer;
+  display: block;
+}
+.ad-date[aria-pressed="true"] {
+  border-color: var(--green);
+  background: #fff;
+  box-shadow: inset 0 0 0 1.5px var(--green);
+}
+.ad-date .dow {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.ad-date .dnum {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 19px;
+  color: var(--green);
+  line-height: 1.2;
+}
+.ad-date .mon { display: block; font-size: 11px; color: var(--muted); }
+.ad-date .tdy {
+  display: block;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mustard-dk);
+  font-weight: 600;
+  margin-top: 1px;
+}
+
+.ad-anydate {
+  margin-top: 11px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ad-anydate label { font-size: 13px; color: var(--muted); }
+.ad-anydate input {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 8px 10px;
+  font-size: 15px;
+}
+
+/* ---------------- forecast ---------------- */
+
+.ad-forecast {
+  margin-top: 22px;
+  background: var(--green);
+  color: var(--cream);
+  border-radius: var(--r);
+  padding: 19px 18px 17px;
+}
+.ad-fc-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ad-fc-head h2 { font-size: 18px; color: var(--cream); }
+.ad-fc-date { font-size: 12.5px; color: #a9c0af; white-space: nowrap; }
+
+.ad-hero {
+  text-align: center;
+  padding: 18px 0 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+.ad-hero-n {
+  font-family: var(--font-display);
+  font-size: 54px;
+  line-height: 1;
+  color: var(--mustard);
+  font-variant-numeric: tabular-nums;
+}
+.ad-hero-l {
+  margin-top: 6px;
+  font-size: 13.5px;
+  letter-spacing: 0.05em;
+  color: #c4d5c8;
+}
+.ad-hero-sub { margin-top: 7px; font-size: 13px; color: #a9c0af; }
+
+.ad-fc-grid {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 15px 0 4px;
+}
+.ad-fc-cell {
+  flex: 1 1 90px;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: var(--r-s);
+  padding: 11px 8px;
+  text-align: center;
+}
+.ad-fc-cell .n {
+  font-family: var(--font-display);
+  font-size: 25px;
+  line-height: 1;
+  color: var(--cream);
+  font-variant-numeric: tabular-nums;
+}
+.ad-fc-cell .l { margin-top: 4px; font-size: 12px; color: #a9c0af; }
+.ad-fc-empty { font-size: 13.5px; color: #a9c0af; padding: 4px 0; }
+
+.ad-fc-foot {
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 12.5px;
+  color: #a9c0af;
+}
+
+/* ---------------- add button ---------------- */
+
+.ad-add {
+  width: 100%;
+  margin-top: 18px;
+  background: var(--mustard);
+  color: var(--cocoa);
+  border: 0;
+  border-radius: var(--r-s);
+  padding: 15px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ---------------- manual entry ---------------- */
+
+.ad-entry {
+  margin-top: 18px;
+  background: var(--card);
+  border: 1.5px solid var(--green);
+  border-radius: var(--r);
+  padding: 17px 16px 19px;
+}
+.ad-entry-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 15px;
+}
+.ad-entry-head h2 { font-size: 19px; color: var(--green); }
+.ad-close {
+  background: none;
+  border: 0;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.ad-lookup { font-size: 13.5px; color: var(--muted); margin: -4px 0 12px; }
+
+.ad-known {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--sage);
+  border-radius: var(--r-s);
+  padding: 11px 13px;
+  margin-bottom: 14px;
+}
+.ad-known strong { font-size: 15.5px; color: var(--green-deep); }
+.ad-known span { font-size: 13.5px; color: var(--green-soft); }
+.ad-editlink {
+  align-self: flex-start;
+  margin-top: 4px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 13px;
+  color: var(--green-soft);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ad-sub {
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+  margin: 18px 0 9px;
+}
+
+.ad-entry-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 17px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+}
+.ad-entry-total span { font-size: 14.5px; color: var(--muted); }
+.ad-entry-total strong {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--green);
+}
+
+.ad-note { margin: 11px 0 0; font-size: 12.5px; color: var(--muted); }
+
+.ad-entry-done { text-align: center; padding: 6px 0 4px; }
+.ad-entry-done .tick {
+  width: 50px; height: 50px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: var(--green);
+  color: var(--mustard);
+  font-size: 25px;
+  line-height: 50px;
+}
+.ad-entry-done .ref {
+  display: inline-block;
+  background: var(--sage);
+  color: var(--green-deep);
+  border-radius: 100px;
+  padding: 5px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+.ad-entry-done p { font-size: 15px; margin: 13px 0 18px; }
+.ad-entry-actions { display: flex; gap: 10px; }
+.ad-entry-actions .cta { margin-top: 0; }
+.ad-ghost {
+  flex: 0 0 auto;
+  background: none;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 16px 20px;
+  font-size: 15px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/* ---------------- orders ---------------- */
+
+.ad-orders-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ad-orders-head .ad-h { margin-bottom: 0; }
+.ad-refresh {
+  background: none;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.ad-refresh:disabled { opacity: 0.5; cursor: default; }
+
+.ad-empty {
+  margin-top: 12px;
+  font-size: 14.5px;
+  color: var(--muted);
+  background: var(--card);
+  border: 1.5px dashed var(--line);
+  border-radius: var(--r);
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.ad-order {
+  margin-top: 11px;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r);
+  padding: 14px 15px 13px;
+}
+.ad-order.is-cancelled { opacity: 0.62; }
+
+.ad-order-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ad-order-name {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--green);
+  line-height: 1.2;
+}
+.ad-order-where { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+
+.ad-order-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+.ad-ref {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--cocoa);
+  letter-spacing: 0.04em;
+}
+.ad-src {
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  font-weight: 600;
+  border-radius: 100px;
+  padding: 3px 9px;
+  background: var(--sage);
+  color: var(--green-deep);
+}
+/* WhatsApp orders are the ones that used to be invisible — make them findable. */
+.ad-src.src-whatsapp { background: #dcf3e0; color: #1a5c33; }
+.ad-src.src-website { background: var(--sage); color: var(--green-deep); }
+.ad-src.src-manual { background: #efe4cd; color: var(--cocoa); }
+
+.ad-order-packs {
+  margin-top: 10px;
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.ad-order-line {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 13.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-order-note {
+  margin-top: 9px;
+  background: #fdf6e3;
+  border-radius: var(--r-s);
+  padding: 8px 11px;
+  font-size: 13.5px;
+  color: var(--cocoa);
+}
+
+.ad-order-cancelled {
+  margin-top: 11px;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.ad-order-actions { display: flex; gap: 9px; margin-top: 12px; }
+.ad-wa {
+  flex: 1 1 0;
+  text-align: center;
+  border: 1.5px solid var(--green);
+  color: var(--green);
+  border-radius: var(--r-s);
+  padding: 10px;
+  font-size: 14.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.ad-wa:hover { background: var(--green); color: var(--cream); }

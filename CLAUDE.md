@@ -89,12 +89,43 @@ plus a valid mixed-pack order — all passed before this was trusted.
   sandbox this was built in couldn't reach Google Fonts to verify a
   `next/font` build — this works but could be switched to `next/font` for a
   small perf gain if you can verify the build with network access.
+- **Day 3:** the admin dashboard (`app/admin/`). Production forecast (litres
+  of milk as the hero number, packs by size, kg paneer), orders list for a
+  chosen delivery date, manual WhatsApp order entry, and per-order Confirm /
+  Dispatch `wa.me` links. See the Admin section below for the access pattern.
 - **Not yet deployed.** A Vercel deploy attempt hit `403: You don't have
   permission to create a project` — the connected Vercel account could read
   the existing `wellness-connect` project but not create a new one. Likely a
   team-role restriction. Resolve via the Vercel dashboard (create an empty
   project named `navera` manually, or fix account/team permissions) before
   the first deploy.
+
+### Admin — a different access pattern on purpose
+
+`/admin` does **not** go through `SECURITY DEFINER` functions. That pattern
+exists to make the *public* path safe for `anon`; it has no job once there is
+a real signed-in user. Admin signs in with Supabase Auth and queries the
+tables directly — the `admin manages X` policies (`ALL` / `to authenticated`
+/ `USING true`) plus full table GRANTs to `authenticated` cover every table.
+**Do not add SECURITY DEFINER functions for admin features.**
+
+- `lib/admin.js` — password sign-in against `/auth/v1/token`, session in
+  `localStorage`, proactive refresh a minute before expiry plus one retry on a
+  401, and a `db()` helper for authenticated PostgREST calls. No SDK, matching
+  `lib/db.js`.
+- `anon` has **no table GRANT at all** on customers/orders/order_items — a
+  direct REST read fails with `42501` before RLS is even consulted. Worth
+  knowing: it means a broken RLS policy alone cannot leak those tables.
+- **Manual entry deliberately ignores the 6 PM cutoff.** The cutoff governs
+  what *customers* may do; a WhatsApp order has already arrived, and refusing
+  to record it is what breaks the milk forecast in the first place. This is
+  the one place the cutoff is intentionally not applied.
+- Manual entry writes in four steps (customer → order → items). If the items
+  insert fails the order is deleted again — an order with no items would
+  silently under-count milk, which is worse than no order.
+- Admin dates are handled as plain `YYYY-MM-DD` strings and "today" is
+  resolved through `settings.timezone`, so the forecast can't slide a day if
+  the browser is in another zone.
 
 ## Business rules currently in effect
 
@@ -118,15 +149,18 @@ plus a valid mixed-pack order — all passed before this was trusted.
   substantiation-requiring claim and the decision was to drop it, not to
   reintroduce it from old marketing material.
 
-## Next steps (Day 3 onward — see docs/NAVERA_WEBSITE_MASTER_SPEC.md §41)
+## Open manual step — admin login credential
 
-Day 3 is the admin view + production forecast, and — critically — **manual
-WhatsApp order entry**, phone-number-first (existing customers autofill from
-phone, ~15–20 seconds per order). Without that screen, WhatsApp orders never
-reach the database and the milk forecast is wrong by however many orders
-arrived that way. It is not optional scope, it's load-bearing.
+**`auth.users` is empty.** `/admin` is built and its data layer is tested, but
+nobody can sign in until a user exists. Create it by hand in the Supabase
+dashboard → Authentication → Users → Add user (email + password, confirm the
+email). It is deliberately not scripted: no service-role key is stored in this
+repo and none should be. Until that is done, the login form and the manual
+entry screen have not been exercised in a browser.
 
-After that: Order Again (highest-value single feature — lands on the private
+## Next steps (Day 4 onward — see docs/NAVERA_WEBSITE_MASTER_SPEC.md §41)
+
+Next: Order Again (highest-value single feature — lands on the private
 `access_token` link, action-first not a history page), My Navera, Change
 Tomorrow's Order (same cutoff as ordering), then Weekly Delivery with
 skip/pause. Full sequence in the spec §41.
