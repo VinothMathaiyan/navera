@@ -89,6 +89,15 @@ plus a valid mixed-pack order — all passed before this was trusted.
   sandbox this was built in couldn't reach Google Fonts to verify a
   `next/font` build — this works but could be switched to `next/font` for a
   small perf gain if you can verify the build with network access.
+- The masthead logo (`Masthead()` in `app/OrderFlow.js`) reads
+  `public/navera-logo.png` — not committed, drop the real file in yourself.
+  Rendered with `next/image`, `fill` + `object-fit: contain`, boxed at
+  `min(230px, 58vw)` (`.masthead .logo-wrap` in `globals.css`). `contain` was
+  a deliberate choice over `cover`: it can never crop into the wordmark, only
+  ever add empty space if the PNG has extra margin baked in. If the real file
+  turns out to have a lot of dead space below the artwork (as the reference
+  image did), it'll show as blank green padding — re-crop the PNG tighter, or
+  ask for the box to switch to a `cover` treatment once you can see it live.
 - **Day 3:** the admin dashboard (`app/admin/`). Production forecast (litres
   of milk as the hero number, packs by size, kg paneer), orders list for a
   chosen delivery date, manual WhatsApp order entry, and per-order Confirm /

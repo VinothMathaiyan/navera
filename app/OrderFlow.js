@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { rpc } from "../lib/db";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -398,9 +399,17 @@ export default function OrderFlow({ info, loadError }) {
 function Masthead() {
   return (
     <header className="masthead">
-      <div className="mark">Navera</div>
+      <div className="logo-wrap">
+        <Image
+          src="/navera-logo.png"
+          alt="Navera Fresh Paneer"
+          fill
+          priority
+          sizes="(max-width: 480px) 58vw, 230px"
+          style={{ objectFit: "contain" }}
+        />
+      </div>
       <div className="rule" />
-      <div className="sub">Fresh Paneer</div>
       <div className="lede">
         Fresh paneer,
         <br />
