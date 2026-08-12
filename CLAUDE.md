@@ -90,14 +90,18 @@ plus a valid mixed-pack order — all passed before this was trusted.
   `next/font` build — this works but could be switched to `next/font` for a
   small perf gain if you can verify the build with network access.
 - The masthead logo (`Masthead()` in `app/OrderFlow.js`) reads
-  `public/navera-logo.png` — not committed, drop the real file in yourself.
-  Rendered with `next/image`, `fill` + `object-fit: contain`, boxed at
-  `min(230px, 58vw)` (`.masthead .logo-wrap` in `globals.css`). `contain` was
-  a deliberate choice over `cover`: it can never crop into the wordmark, only
-  ever add empty space if the PNG has extra margin baked in. If the real file
-  turns out to have a lot of dead space below the artwork (as the reference
-  image did), it'll show as blank green padding — re-crop the PNG tighter, or
-  ask for the box to switch to a `cover` treatment once you can see it live.
+  `public/navera-logo.png`, rendered with `next/image`, `fill` +
+  `object-fit: contain`, boxed at `min(230px, 58vw)` (`.masthead .logo-wrap`
+  in `globals.css`). The source file supplied for it was a flat white PNG, no
+  alpha — placed as-is it would have shown a white box on the green header.
+  It was reprocessed into a proper transparent PNG before being committed:
+  flood-fill from the border for the outer background (safe against the
+  cow's white fur, since fur is enclosed by the illustration's outline and
+  never touches the border), plus a second pass restricted to the wordmark's
+  y-range that fills enclosed letter counters (the loops in "a"/"e") without
+  going near the illustration. If the logo ever needs replacing, a plain
+  export from Canva/Figma will almost certainly be flat white again — expect
+  to repeat this, not just drop the new file in.
 - **Day 3:** the admin dashboard (`app/admin/`). Production forecast (litres
   of milk as the hero number, packs by size, kg paneer), orders list for a
   chosen delivery date, manual WhatsApp order entry, and per-order Confirm /
