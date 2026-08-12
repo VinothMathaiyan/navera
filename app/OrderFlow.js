@@ -21,6 +21,10 @@ export default function OrderFlow({ info, loadError }) {
   const [phone, setPhone] = useState("");
   const [areaId, setAreaId] = useState("");
   const [flat, setFlat] = useState("");
+  // "" = untouched, "none" = explicitly chose No preference. Both store null;
+  // they are kept apart only so nothing looks pre-selected on first load.
+  const [timePref, setTimePref] = useState("");
+  const [addressNote, setAddressNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [done, setDone] = useState(null);
@@ -73,6 +77,8 @@ export default function OrderFlow({ info, loadError }) {
         p_delivery_date: date,
         p_items: items,
         p_source: "website",
+        p_time_preference: timePref === "earlier" || timePref === "later" ? timePref : null,
+        p_address_note: addressNote.trim() || null,
       });
       setDone(res);
       window.scrollTo({ top: 0 });
@@ -117,8 +123,8 @@ export default function OrderFlow({ info, loadError }) {
           <h1>Thank you, {done.name.split(" ")[0]}</h1>
           <div className="ref">{done.reference}</div>
           <p className="msg">
-            Your paneer will be prepared fresh on {dayName} morning and delivered
-            between {done.delivery_window.replace(" - ", " and ")}.
+            Your paneer will be prepared fresh on {dayName} morning. We&apos;ll
+            confirm your delivery time on WhatsApp.
           </p>
 
           <div className="card">
@@ -255,7 +261,7 @@ export default function OrderFlow({ info, loadError }) {
               );
             })}
           </div>
-          <p className="window">Delivered between {info.delivery_window}.</p>
+          <p className="window">Delivered fresh that morning.</p>
         </section>
 
         {/* 3 — details */}
@@ -315,6 +321,40 @@ export default function OrderFlow({ info, loadError }) {
               value={flat}
               placeholder="e.g. B-302"
               onChange={(e) => setFlat(e.target.value)}
+            />
+          </div>
+
+          {/* A preference, not a bookable slot — deliberately no clock times. */}
+          <div className="field">
+            <span className="lbl">Preferred delivery time (optional)</span>
+            <div className="bands" role="group" aria-label="Preferred delivery time (optional)">
+              {[
+                ["earlier", "Earlier morning"],
+                ["later", "Later morning"],
+                ["none", "No preference"],
+              ].map(([value, label]) => (
+                <button
+                  key={label}
+                  type="button"
+                  className="band"
+                  aria-pressed={timePref === value}
+                  onClick={() => setTimePref(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="hint">We&apos;ll try to match it and confirm on WhatsApp.</p>
+          </div>
+
+          <div className="field">
+            <label htmlFor="an">Anything to help us find you? (optional)</label>
+            <input
+              id="an"
+              value={addressNote}
+              maxLength={200}
+              placeholder="e.g. near the side gate, or call on arrival"
+              onChange={(e) => setAddressNote(e.target.value)}
             />
           </div>
         </section>
@@ -378,7 +418,7 @@ export default function OrderFlow({ info, loadError }) {
             <div className="moment">
               <div className="when">Delivered fresh</div>
               <div className="what">
-                To your doorstep between {info.delivery_window}.
+                To your doorstep the morning you chose.
               </div>
             </div>
           </div>

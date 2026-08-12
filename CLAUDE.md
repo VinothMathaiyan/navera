@@ -64,7 +64,16 @@ active `delivery_areas`, active `products`. All public writes go through two
   recomputes the cutoff server-side (never trust a date from the browser),
   checks the area exists and is active, prices items from the `products`
   table (never from client input), creates/updates the customer by phone,
-  creates the order and items, returns the reference + access_token.
+  creates the order and items, returns the reference + access_token. Also
+  takes optional `p_time_preference` / `p_address_note` (see the delivery-time
+  rule below). Both are conveniences, so an unrecognised preference is coerced
+  to null and the note is trimmed and capped at 200 chars, rather than
+  refusing the order over a cosmetic field.
+  - Note for future changes: adding a parameter means a **new signature**, so
+    the function has to be dropped and recreated, not `CREATE OR REPLACE`d —
+    otherwise the old overload lingers and a call becomes ambiguous. Grants
+    are lost on drop, so re-`grant execute` to `anon`, `authenticated` and
+    `service_role` afterwards (`PUBLIC` stays revoked).
 
 **Keep this pattern for every future public-facing feature** (Order Again,
 Change Tomorrow's Order, subscriptions, skip/pause): a narrow
@@ -161,8 +170,28 @@ tables directly — the `admin manages X` policies (`ALL` / `to authenticated`
   updating `settings`.
 - Delivery days: Tue/Fri/Sun seeded as a **placeholder** — confirmed
   changeable, expected to be revised once real order patterns are known.
-- Delivery window: 6:30–8:30 AM, single window (deliberately not offering a
-  choice of slots — one operator, one window).
+- **Delivery time: no fixed window is promised to customers any more.**
+  This replaced the earlier rule ("6:30–8:30 AM, single window, deliberately
+  not offering a choice of slots"). Changed on 2026-08-12 as a deliberate
+  founder decision, not a regression — if you find the old window missing
+  from the customer page, that is correct and must not be "restored".
+  - The customer optionally states a rough preference — *Earlier morning* /
+    *Later morning* / *No preference* — and the real time is agreed
+    human-to-human on WhatsApp.
+  - These are **preferences, not bookable slots.** Never show clock times
+    against them and never word them as a guarantee. The helper line is
+    "We'll try to match it and confirm on WhatsApp."
+  - `settings.delivery_window` still exists in the database and is still
+    admin-editable, but nothing customer-facing may present it as a promise.
+    That includes the admin WhatsApp templates: Confirm/Dispatch used to
+    quote it, and no longer do, because a pre-filled "between 6:30 and 8:30"
+    puts the retired promise straight back — just over WhatsApp instead of
+    the site. Confirm now echoes the customer's own stated preference and
+    says the time will be confirmed closer to the day.
+  - Stored on `orders.time_preference` (`'earlier'` / `'later'` / null, with
+    a check constraint) and `orders.address_note` (free text). Both nullable
+    and both genuinely optional — an order with neither must always place
+    exactly as before.
 - Areas: Casagrand, Castle, Airview, Navins Jayram. "Casagrand" is known to
   possibly need a more specific name (e.g. "Casagrand Irena") later — left
   as-is for now, flagged, not yet changed.

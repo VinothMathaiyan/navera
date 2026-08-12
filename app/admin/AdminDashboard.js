@@ -63,8 +63,11 @@ const SOURCE_LABEL = {
   weekly: "Weekly",
 };
 
+const TIME_PREF_LABEL = { earlier: "Earlier morning", later: "Later morning" };
+
 const ORDER_SELECT =
-  "id,reference,delivery_date,status,source,subtotal,delivery_charge,total,notes,created_at," +
+  "id,reference,delivery_date,status,source,subtotal,delivery_charge,total,notes," +
+  "time_preference,address_note,created_at," +
   "customer:customers(id,name,phone,flat,area:delivery_areas(name))," +
   "items:order_items(quantity,weight_grams,unit_price)";
 
@@ -433,6 +436,9 @@ function ManualEntry({
   const [areaId, setAreaId] = useState("");
   const [flat, setFlat] = useState("");
   const [notes, setNotes] = useState("");
+  // "" = untouched, "none" = explicitly chose No preference. Both store null.
+  const [timePref, setTimePref] = useState("");
+  const [addressNote, setAddressNote] = useState("");
 
   const [qty, setQty] = useState({});
   const [date, setDate] = useState(defaultDate);
@@ -545,6 +551,9 @@ function ManualEntry({
           delivery_charge: deliveryCharge,
           total,
           notes: notes.trim() || null,
+          time_preference:
+            timePref === "earlier" || timePref === "later" ? timePref : null,
+          address_note: addressNote.trim() || null,
         },
         prefer: "return=representation",
       });
@@ -589,6 +598,8 @@ function ManualEntry({
     setAreaId("");
     setFlat("");
     setNotes("");
+    setTimePref("");
+    setAddressNote("");
     setQty({});
     setDone(null);
     setError(null);
@@ -737,6 +748,36 @@ function ManualEntry({
             ))}
           </div>
 
+          <div className="ad-sub">Preferred time (optional)</div>
+          <div className="bands" role="group" aria-label="Preferred delivery time (optional)">
+            {[
+              ["earlier", "Earlier morning"],
+              ["later", "Later morning"],
+              ["none", "No preference"],
+            ].map(([value, label]) => (
+              <button
+                key={label}
+                type="button"
+                className="band"
+                aria-pressed={timePref === value}
+                onClick={() => setTimePref(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="field" style={{ marginTop: 14 }}>
+            <label htmlFor="maddr">Anything to help find them? (optional)</label>
+            <input
+              id="maddr"
+              value={addressNote}
+              maxLength={200}
+              placeholder="e.g. near the side gate"
+              onChange={(e) => setAddressNote(e.target.value)}
+            />
+          </div>
+
           <div className="field" style={{ marginTop: 12 }}>
             <label htmlFor="mnotes">Note (optional)</label>
             <input
@@ -774,21 +815,31 @@ function OrderCard({ order, settings, onDispatched, onExpired }) {
   const customer = order.customer ?? {};
   const waNumber = customer.phone ? `91${customer.phone}` : null;
   const firstName = (customer.name ?? "").trim().split(" ")[0] || "there";
-  const deliveryWindow = settings?.delivery_window ?? "6:30 AM - 8:30 AM";
 
   const [dispatchError, setDispatchError] = useState(null);
 
   const link = (text) =>
     `https://wa.me/${waNumber}?text=${encodeURIComponent(text)}`;
 
+  // These templates no longer quote settings.delivery_window. The business
+  // stopped promising a fixed window, and a pre-filled "between 6:30 and 8:30"
+  // would put that promise straight back — just over WhatsApp instead of the
+  // site. Confirm now opens the time conversation, echoing the customer's own
+  // stated preference so the founder isn't retyping it.
+  const prefEcho = order.time_preference
+    ? ` You asked for ${
+        order.time_preference === "earlier" ? "earlier" : "later"
+      } in the morning — we'll aim for that.`
+    : "";
+
   const confirmText =
     `Hi ${firstName}, this is Navera. Your order ${order.reference} is confirmed for ` +
-    `${shortDate(order.delivery_date)}, delivered between ${deliveryWindow}. ` +
-    `${rupees(order.total)} to pay on delivery. Thank you!`;
+    `${shortDate(order.delivery_date)} morning.${prefEcho} ` +
+    `${rupees(order.total)} to pay on delivery. I'll confirm the delivery time with you closer to the day. Thank you!`;
 
   const dispatchText =
     `Hi ${firstName}, your Navera order ${order.reference} is packed and on its way ` +
-    `this morning — delivery between ${deliveryWindow}. ${rupees(order.total)} to pay on delivery.`;
+    `this morning. ${rupees(order.total)} to pay on delivery.`;
 
   const packs = (order.items ?? [])
     .slice()
@@ -844,6 +895,17 @@ function OrderCard({ order, settings, onDispatched, onExpired }) {
         <span>{customer.phone ?? "—"}</span>
         <span>{rupees(order.total)}</span>
       </div>
+
+      {/* Both optional — when absent they leave no trace, rather than an empty label. */}
+      {order.time_preference && (
+        <div className="ad-order-pref">
+          Prefers {TIME_PREF_LABEL[order.time_preference] ?? order.time_preference}
+        </div>
+      )}
+
+      {order.address_note && (
+        <div className="ad-order-find">{order.address_note}</div>
+      )}
 
       {order.notes && <div className="ad-order-note">{order.notes}</div>}
 

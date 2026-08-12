@@ -232,6 +232,39 @@ button, input, select { font: inherit; color: inherit; }
 .field input:focus, .field select:focus { border-color: var(--green-soft); }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
 
+/* Matches .field label, but for a group of buttons rather than one control —
+   a <label> would have nothing single to point at. */
+.field .lbl {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+
+/* Soft bands, not slots: no clock times here on purpose. */
+.bands { display: flex; gap: 8px; flex-wrap: wrap; }
+.band {
+  flex: 1 1 auto;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 100px;
+  padding: 10px 14px;
+  font-size: 14.5px;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color .15s, background .15s;
+}
+.band:hover { border-color: var(--green-soft); }
+.band[aria-pressed="true"] {
+  border-color: var(--green);
+  background: #fff;
+  box-shadow: inset 0 0 0 1.5px var(--green);
+  font-weight: 600;
+}
+
+.hint { margin: 7px 0 0; font-size: 13px; color: var(--muted); }
+
 .notlisted {
   margin-top: 2px;
   font-size: 13px;

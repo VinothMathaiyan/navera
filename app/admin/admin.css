@@ -457,6 +457,29 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Time preference and "how to find me" — both optional, so these only ever
+   render when the customer actually said something. Visually distinct from
+   .ad-order-note (the free-form order note) since they drive different
+   decisions: one shapes the delivery run order, the other the doorstep. */
+.ad-order-pref {
+  display: inline-block;
+  margin-top: 9px;
+  background: var(--sage);
+  color: var(--green-deep);
+  border-radius: 100px;
+  padding: 4px 11px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.ad-order-find {
+  margin-top: 9px;
+  border-left: 2.5px solid var(--green-soft);
+  padding: 2px 0 2px 10px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
 .ad-order-note {
   margin-top: 9px;
   background: #fdf6e3;
