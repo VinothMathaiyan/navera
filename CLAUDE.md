@@ -92,7 +92,10 @@ plus a valid mixed-pack order — all passed before this was trusted.
 - **Day 3:** the admin dashboard (`app/admin/`). Production forecast (litres
   of milk as the hero number, packs by size, kg paneer), orders list for a
   chosen delivery date, manual WhatsApp order entry, and per-order Confirm /
-  Dispatch `wa.me` links. See the Admin section below for the access pattern.
+  Dispatch `wa.me` links. Dispatch also sets `status='dispatched'`. See the
+  Admin section below for the access pattern. Verified end-to-end in a
+  browser against the live database — login, forecast, manual entry for both
+  a new and a returning customer, and the dispatch status write.
 - **Not yet deployed.** A Vercel deploy attempt hit `403: You don't have
   permission to create a project` — the connected Vercel account could read
   the existing `wellness-connect` project but not create a new one. Likely a
@@ -126,6 +129,17 @@ tables directly — the `admin manages X` policies (`ALL` / `to authenticated`
 - Admin dates are handled as plain `YYYY-MM-DD` strings and "today" is
   resolved through `settings.timezone`, so the forecast can't slide a day if
   the browser is in another zone.
+- **Confirm and Dispatch must stay real `<a href>` elements.** Dispatch fires
+  its status write from `onClick` and lets the anchor navigate on its own. The
+  obvious alternative — `await` the PATCH, then `window.open()` — is broken:
+  the await spends the click's user-gesture window and the browser silently
+  blocks the popup, so the WhatsApp thread never opens. That was measured in
+  this project, not guessed. If either link ever needs to do more work, keep
+  the navigation on the anchor and put the work in `onClick`.
+- The first table read straight after sign-in can come back `401` while the
+  new token propagates. `lib/admin.js` refreshes and retries once, which
+  absorbs it; expect to see that 401 in the network log even on a healthy
+  login. It is not a bug to chase.
 
 ## Business rules currently in effect
 
@@ -149,14 +163,13 @@ tables directly — the `admin manages X` policies (`ALL` / `to authenticated`
   substantiation-requiring claim and the decision was to drop it, not to
   reintroduce it from old marketing material.
 
-## Open manual step — admin login credential
+## Admin login
 
-**`auth.users` is empty.** `/admin` is built and its data layer is tested, but
-nobody can sign in until a user exists. Create it by hand in the Supabase
-dashboard → Authentication → Users → Add user (email + password, confirm the
-email). It is deliberately not scripted: no service-role key is stored in this
-repo and none should be. Until that is done, the login form and the manual
-entry screen have not been exercised in a browser.
+One admin user exists (`jesinth.nalini@gmail.com`, confirmed), created by hand
+in the Supabase dashboard. Creating admin users stays a manual dashboard step —
+no service-role key is stored in this repo and none should be. There is no
+signup route and no password reset UI on the site; both are done from the
+dashboard.
 
 ## Next steps (Day 4 onward — see docs/NAVERA_WEBSITE_MASTER_SPEC.md §41)
 

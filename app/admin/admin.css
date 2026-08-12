@@ -476,6 +476,7 @@
 .ad-wa {
   flex: 1 1 0;
   text-align: center;
+  background: none;
   border: 1.5px solid var(--green);
   color: var(--green);
   border-radius: var(--r-s);
@@ -483,5 +484,17 @@
   font-size: 14.5px;
   font-weight: 600;
   text-decoration: none;
+  cursor: pointer;
 }
 .ad-wa:hover { background: var(--green); color: var(--cream); }
+.ad-wa:disabled { opacity: 0.55; cursor: default; background: none; color: var(--green); }
+
+.ad-status {
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  font-weight: 600;
+  border-radius: 100px;
+  padding: 3px 9px;
+}
+.ad-status.st-dispatched { background: #fdecc8; color: var(--cocoa); }

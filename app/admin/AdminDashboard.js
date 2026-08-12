@@ -337,7 +337,17 @@ export default function AdminDashboard() {
           )}
 
           {orders.map((order) => (
-            <OrderCard key={order.id} order={order} settings={settings} />
+            <OrderCard
+              key={order.id}
+              order={order}
+              settings={settings}
+              onDispatched={(id) =>
+                setOrders((prev) =>
+                  prev.map((o) => (o.id === id ? { ...o, status: "dispatched" } : o))
+                )
+              }
+              onExpired={dropToLogin}
+            />
           ))}
         </section>
       </div>
@@ -760,29 +770,53 @@ function ManualEntry({
 
 /* ================================================== order card */
 
-function OrderCard({ order, settings }) {
+function OrderCard({ order, settings, onDispatched, onExpired }) {
   const customer = order.customer ?? {};
   const waNumber = customer.phone ? `91${customer.phone}` : null;
   const firstName = (customer.name ?? "").trim().split(" ")[0] || "there";
-  const window = settings?.delivery_window ?? "6:30 AM - 8:30 AM";
+  const deliveryWindow = settings?.delivery_window ?? "6:30 AM - 8:30 AM";
+
+  const [dispatchError, setDispatchError] = useState(null);
 
   const link = (text) =>
     `https://wa.me/${waNumber}?text=${encodeURIComponent(text)}`;
 
   const confirmText =
     `Hi ${firstName}, this is Navera. Your order ${order.reference} is confirmed for ` +
-    `${shortDate(order.delivery_date)}, delivered between ${window}. ` +
+    `${shortDate(order.delivery_date)}, delivered between ${deliveryWindow}. ` +
     `${rupees(order.total)} to pay on delivery. Thank you!`;
 
   const dispatchText =
     `Hi ${firstName}, your Navera order ${order.reference} is packed and on its way ` +
-    `this morning — delivery between ${window}. ${rupees(order.total)} to pay on delivery.`;
+    `this morning — delivery between ${deliveryWindow}. ${rupees(order.total)} to pay on delivery.`;
 
   const packs = (order.items ?? [])
     .slice()
     .sort((a, b) => a.weight_grams - b.weight_grams)
     .map((i) => `${i.weight_grams}g × ${i.quantity}`)
     .join(", ");
+
+  // The Dispatch link navigates immediately, same as Confirm — a real anchor
+  // click, not blocked by popup heuristics. The status write runs alongside
+  // it in the background rather than gating the navigation: window.open()
+  // called after an awaited PATCH loses the click's user-gesture window and
+  // gets silently popup-blocked in real browsers (confirmed against this
+  // build — the WhatsApp tab failed to open every time with that ordering).
+  // The WhatsApp message itself still needs a press of WhatsApp's own Send
+  // button, so nothing goes out without a human reviewing it first.
+  function onDispatchClick() {
+    setDispatchError(null);
+    db(`orders?id=eq.${order.id}`, {
+      method: "PATCH",
+      body: { status: "dispatched" },
+      prefer: "return=minimal",
+    })
+      .then(() => onDispatched(order.id))
+      .catch((e) => {
+        if (e instanceof SessionExpired) onExpired();
+        else setDispatchError(e.message);
+      });
+  }
 
   return (
     <article className={`ad-order${order.status === "cancelled" ? " is-cancelled" : ""}`}>
@@ -798,6 +832,9 @@ function OrderCard({ order, settings }) {
           <span className={`ad-src src-${order.source}`}>
             {SOURCE_LABEL[order.source] ?? order.source}
           </span>
+          {order.status === "dispatched" && (
+            <span className="ad-status st-dispatched">Dispatched</span>
+          )}
         </div>
       </div>
 
@@ -810,6 +847,8 @@ function OrderCard({ order, settings }) {
 
       {order.notes && <div className="ad-order-note">{order.notes}</div>}
 
+      {dispatchError && <div className="ad-err">{dispatchError}</div>}
+
       {order.status === "cancelled" ? (
         <div className="ad-order-cancelled">Cancelled — not counted in the forecast</div>
       ) : (
@@ -818,7 +857,13 @@ function OrderCard({ order, settings }) {
             <a className="ad-wa" href={link(confirmText)} target="_blank" rel="noopener noreferrer">
               Confirm
             </a>
-            <a className="ad-wa" href={link(dispatchText)} target="_blank" rel="noopener noreferrer">
+            <a
+              className="ad-wa"
+              href={link(dispatchText)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={onDispatchClick}
+            >
               Dispatch
             </a>
           </div>
