@@ -118,7 +118,7 @@ export default function OrderFlow({ info, loadError }) {
         p_delivery_date: date,
         p_items: items,
         p_source: "website",
-        p_time_preference: timePref === "earlier" || timePref === "later" ? timePref : null,
+        p_time_preference: timePref === "morning" || timePref === "evening" ? timePref : null,
         p_address_note: addressNote.trim() || null,
       });
       // Snapshot what was ordered alongside the server's answer. place_order
@@ -163,13 +163,14 @@ export default function OrderFlow({ info, loadError }) {
   if (done) {
     const d = parseDate(done.delivery_date);
     const dayName = DOW_LONG[d.getDay()];
+    const dateStr = `${dayName}, ${d.getDate()} ${MON[d.getMonth()]}`;
 
     // Exactly one order — this one. Never a running list of everything the
     // customer has ever ordered. The packs, day and amount travel with it so
     // the message reads whole on its own.
     const enquiry =
       `Hi Navera, about my order ${done.reference}` +
-      `${done.packsCompact ? ` — ${done.packsCompact}` : ""}, ${dayName}, ${rupees(done.total)}.`;
+      `${done.packsCompact ? ` — ${done.packsCompact}` : ""}, ${dateStr}, ${rupees(done.total)}.`;
 
     return (
       <main>
@@ -227,11 +228,11 @@ export default function OrderFlow({ info, loadError }) {
           WhatsApp — see the delivery-time rule in CLAUDE.md. */}
       {info.past_cutoff ? (
         <div className="cutoff closed">
-          Today&apos;s orders have closed. The next delivery day is {firstDay}.
+          Today&apos;s orders have closed. The next delivery day is {firstDay}, {first.getDate()} {MON[first.getMonth()]}.
         </div>
       ) : (
         <div className="cutoff">
-          Order before {clock(info.cutoff_time)} for {firstDay}
+          Order before {clock(info.cutoff_time)} for {firstDay}, {first.getDate()} {MON[first.getMonth()]}
           {minsLeft !== null && minsLeft <= 60 && minsLeft > 0 && (
             <span className="soon">
               Orders close in {minsLeft} minute{minsLeft === 1 ? "" : "s"}
@@ -414,8 +415,8 @@ export default function OrderFlow({ info, loadError }) {
             </span>
             <div className="bands" role="group" aria-labelledby="tp-lbl">
               {[
-                ["earlier", "Earlier morning"],
-                ["later", "Later morning"],
+                ["morning", "Morning"],
+                ["evening", "Evening"],
                 ["none", "No preference"],
               ].map(([value, label]) => (
                 <button
@@ -532,9 +533,6 @@ export default function OrderFlow({ info, loadError }) {
             <NewTabNote />
           </a>
           <p className="fssai">FSSAI Lic. No. 22426358000260</p>
-          {/* PENDING: the founder owes exact replacement wording for this line.
-              Left untouched deliberately — do not invent a substitute. */}
-          <p className="made">Made in Koliyanur, Viluppuram. Delivered in Chennai.</p>
         </div>
       </div>
     </main>

@@ -63,7 +63,7 @@ const SOURCE_LABEL = {
   weekly: "Weekly",
 };
 
-const TIME_PREF_LABEL = { earlier: "Earlier morning", later: "Later morning" };
+const TIME_PREF_LABEL = { morning: "Morning", evening: "Evening" };
 
 const ORDER_SELECT =
   "id,reference,delivery_date,status,source,subtotal,delivery_charge,total,notes," +
@@ -552,7 +552,7 @@ function ManualEntry({
           total,
           notes: notes.trim() || null,
           time_preference:
-            timePref === "earlier" || timePref === "later" ? timePref : null,
+            timePref === "morning" || timePref === "evening" ? timePref : null,
           address_note: addressNote.trim() || null,
         },
         prefer: "return=representation",
@@ -751,8 +751,8 @@ function ManualEntry({
           <div className="ad-sub">Preferred time (optional)</div>
           <div className="bands" role="group" aria-label="Preferred delivery time (optional)">
             {[
-              ["earlier", "Earlier morning"],
-              ["later", "Later morning"],
+              ["morning", "Morning"],
+              ["evening", "Evening"],
               ["none", "No preference"],
             ].map(([value, label]) => (
               <button
@@ -836,9 +836,7 @@ function OrderCard({ order, settings, onDispatched, onExpired }) {
   // instead of the site. Confirm opens the time conversation, echoing the
   // customer's own stated preference so the founder isn't retyping it.
   const prefEcho = order.time_preference
-    ? ` You asked for ${
-        order.time_preference === "earlier" ? "earlier" : "later"
-      } in the morning — we'll aim for that.`
+    ? ` You asked for ${order.time_preference} delivery — we'll aim for that.`
     : "";
 
   // Both messages carry the whole order, not just its number: the customer
