@@ -7,7 +7,9 @@ export const metadata = {
 };
 
 export const viewport = {
-  themeColor: "#123D28",
+  // Matches the masthead, which is now the logo's cream rather than the old
+  // dark green — a green browser bar above a cream page reads as a mistake.
+  themeColor: "#F8F6F0",
   width: "device-width",
   initialScale: 1,
 };

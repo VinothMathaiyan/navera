@@ -21,6 +21,21 @@
   --danger:     #93331F;
   --on-green:   #C4D5C8;
 
+  /* Sampled straight out of public/Logo.png, not eyeballed. Every one of the
+     3430 pixels on that file's border is exactly #F8F6F0 and fully opaque, so
+     the masthead can match it precisely and the artwork has no edge at all.
+     (Using the page's --cream #F7F4EA instead would put most of that border
+     visibly off-colour — a box around the logo, which is the thing we are
+     avoiding.) The two inks are the logo's own letterform colours, so the type
+     under the mark is the same green and brown as the mark itself.
+       --logo-green  #1E4E36  the "FRESH PANEER" green    8.84:1 on --masthead
+       --logo-brown  #3C2418  the "Navera" wordmark brown 13.33:1
+     If the logo file is ever replaced, re-sample all three — a fresh export
+     will almost certainly carry a slightly different white. */
+  --masthead:   #F8F6F0;
+  --logo-green: #1E4E36;
+  --logo-brown: #3C2418;
+
   --r:   14px;
   --r-s: 10px;
 }
@@ -80,36 +95,60 @@ button, input, select { font: inherit; color: inherit; }
 
 /* ---------------- masthead ---------------- */
 
+/* Light masthead, matching the printed pamphlet. The background is the logo's
+   own cream so the artwork blends into the page instead of sitting in a photo
+   box — see --masthead. Everything below the masthead stays as it was. */
 .masthead {
-  background: var(--green);
-  color: var(--cream);
-  padding: 30px 18px 26px;
+  /* Flat --masthead everywhere the logo and the type sit, then a fade to the
+     page cream across the bottom padding only. Tuning --masthead to the logo
+     left it 3.07 dE from --cream, which is over JND — visible as a faint band
+     on the confirmation screen, where the masthead meets the page directly
+     with no cutoff bar in between. The fade lands entirely inside the 22px
+     bottom padding, so it never sits behind text. */
+  background: linear-gradient(
+    to bottom,
+    var(--masthead) calc(100% - 22px),
+    var(--cream) 100%
+  );
+  background-color: var(--masthead);
+  color: var(--ink);
+  padding: 16px 18px 22px;
   text-align: center;
 }
 .masthead .logo-wrap {
   position: relative;
-  width: min(230px, 58vw);
-  aspect-ratio: 1 / 1;
+  /* The file's true ratio, 1114x601. It was 1/1 for the old square logo —
+     leaving that in place letterboxes this landscape mark inside a square box
+     and adds ~50px of dead space under it, which was most of the gap the
+     founder saw. The mark runs nearly edge to edge in the file (under 1% side
+     margin), so the box width is the mark's actual width on screen. */
+  width: min(310px, 78vw);
+  aspect-ratio: 1114 / 601;
   margin: 0 auto;
 }
+/* The artwork carries 7.7% of its own height as whitespace below the "FRESH
+   PANEER" line, so the margins here are the *remainder* of the visible gap,
+   not all of it — about 12px is already inside the image at phone size. */
 .masthead .rule {
-  width: 46px;
+  width: 40px;
   height: 2px;
-  background: var(--mustard);
-  margin: 12px auto 11px;
+  border-radius: 2px;
+  background: var(--logo-green);
+  margin: 6px auto 0;
 }
 .masthead .lede {
   font-family: var(--font-display);
   font-size: 25px;
   line-height: 1.25;
-  margin-top: 12px;
+  margin-top: 6px;
+  color: var(--logo-green);
 }
-.masthead .lede em { font-style: italic; color: var(--mustard); }
+.masthead .lede em { font-style: italic; color: inherit; }
 .masthead .two {
-  margin: 12px auto 0;
-  max-width: 30ch;
+  margin: 8px auto 0;
+  max-width: 32ch;
   font-size: 14.5px;
-  color: var(--on-green);
+  color: var(--muted);
 }
 
 /* ---------------- cutoff notice ---------------- */
@@ -563,8 +602,13 @@ button, input, select { font: inherit; color: inherit; }
 
 @media (min-width: 600px) {
   .wrap { --pad: 24px; max-width: 528px; }
-  .masthead { padding: 40px 24px 32px; }
-  .masthead .logo-wrap { width: 250px; }
+  /* Roomier than the phone, but nowhere near the old 40px top — the tightened
+     logo-to-lede gap has to hold at every width, not just on mobile. The 26px
+     foot still contains the 22px background fade. */
+  .masthead { padding: 24px 24px 26px; }
+  /* Must exceed the phone's 78vw (~281px at 360), or the mark shrinks as the
+     screen grows. The flat 250px here predates the landscape logo. */
+  .masthead .logo-wrap { width: 340px; }
   .masthead .lede { font-size: 29px; }
   .packs { gap: 13px; }
   .step-head h2 { font-size: 22px; }

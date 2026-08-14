@@ -547,13 +547,19 @@ const NewTabNote = () => <span className="sr-only"> (opens in a new tab)</span>;
 function Masthead() {
   return (
     <header className="masthead">
+      {/* public/Logo.png is the founder's finished artwork on its own cream
+          ground — opaque, not transparent, and deliberately left unprocessed.
+          The masthead background is set to that same cream (see --masthead in
+          globals.css) so the image has no visible edge. Do not run this file
+          through background removal; that was only ever needed for the old
+          logo, which had to sit on a dark green header. */}
       <div className="logo-wrap">
         <Image
-          src="/navera-logo.png"
+          src="/Logo.png"
           alt="Navera Fresh Paneer"
           fill
           priority
-          sizes="(max-width: 480px) 58vw, 230px"
+          sizes="(max-width: 599px) 78vw, 340px"
           style={{ objectFit: "contain" }}
         />
       </div>

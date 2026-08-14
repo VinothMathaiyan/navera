@@ -103,19 +103,37 @@ plus a valid mixed-pack order — all passed before this was trusted.
   sandbox this was built in couldn't reach Google Fonts to verify a
   `next/font` build — this works but could be switched to `next/font` for a
   small perf gain if you can verify the build with network access.
-- The masthead logo (`Masthead()` in `app/OrderFlow.js`) reads
-  `public/navera-logo.png`, rendered with `next/image`, `fill` +
-  `object-fit: contain`, boxed at `min(230px, 58vw)` (`.masthead .logo-wrap`
-  in `globals.css`). The source file supplied for it was a flat white PNG, no
-  alpha — placed as-is it would have shown a white box on the green header.
-  It was reprocessed into a proper transparent PNG before being committed:
-  flood-fill from the border for the outer background (safe against the
-  cow's white fur, since fur is enclosed by the illustration's outline and
-  never touches the border), plus a second pass restricted to the wordmark's
-  y-range that fills enclosed letter counters (the loops in "a"/"e") without
-  going near the illustration. If the logo ever needs replacing, a plain
-  export from Canva/Figma will almost certainly be flat white again — expect
-  to repeat this, not just drop the new file in.
+- **The masthead logo is `public/Logo.png`, and it must not be processed.**
+  `Masthead()` in `app/OrderFlow.js` renders it with `next/image`, `fill` +
+  `object-fit: contain`, boxed by `.masthead .logo-wrap`. It is the founder's
+  finished artwork — cow, barn, sun, leaves, brown "Navera", green "FRESH
+  PANEER" — on its own **opaque** cream ground (alpha 255 throughout). It is
+  committed byte-for-byte as supplied.
+  - **There used to be a `public/navera-logo.png`, deleted 2026-08-14, and the
+    note here used to describe flood-filling it transparent.** That was a hack
+    for the old *dark green* masthead, where an opaque light background would
+    have shown as a white box. The masthead is light now, so the hack is not
+    just unnecessary — the founder explicitly ruled it out. Do not make this
+    file transparent, and do not "restore" the old one. There is one logo file.
+  - The image is **1114 × 601 (1.85358)**. `.masthead .logo-wrap` must carry
+    that `aspect-ratio`. It was `1 / 1` for the old square logo; leaving a
+    square box around a landscape mark letterboxes it and adds ~50 px of dead
+    space under the artwork, which was most of the gap the founder complained
+    about.
+  - Every pixel of the file's 1-pixel border is exactly **`#F8F6F0`**, flat and
+    opaque — which is why `--masthead` can match it outright and the artwork
+    has no edge. Using the page's `--cream` there instead puts most of that
+    border visibly off-colour, i.e. a box around the logo.
+  - The artwork carries its own whitespace — 3.7% of height above, **7.7%
+    below**, and under 1% at each side (the "FRESH PANEER" flourishes run
+    nearly edge to edge). So the visible gap under the mark is that baked-in
+    space *plus* the CSS margin, and the box width is effectively the mark's
+    width on screen. Tune the CSS against the rendered result, not on paper.
+  - **The founder uploads this file through the GitHub web UI** ("Add files via
+    upload" commits), so it can arrive on `origin/main` without ever being in
+    the local working copy. If a new logo is mentioned and `public/` doesn't
+    have it, `git fetch` before concluding it is missing — and re-sample the
+    background and ratio, because a re-export changes both.
 - **Day 3:** the admin dashboard (`app/admin/`). Production forecast (litres
   of milk as the hero number, packs by size, kg paneer), orders list for a
   chosen delivery date, manual WhatsApp order entry, and per-order Confirm /
