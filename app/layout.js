@@ -3,7 +3,7 @@ import "./globals.css";
 export const metadata = {
   title: "Navera Fresh Paneer — Prepared after your order",
   description:
-    "Country cow milk and fresh lemon. Nothing else. Prepared after your order and delivered fresh to your door in Chennai.",
+    "From free-roaming cared cows, around 100 km away from Chennai. Milk and fresh lemon, nothing else. Prepared after your order and delivered fresh to your door.",
 };
 
 export const viewport = {

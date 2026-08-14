@@ -14,6 +14,27 @@ const parseDate = (s) => {
 };
 const rupees = (n) => "₹" + Number(n).toLocaleString("en-IN");
 
+// get_ordering_info formats the cutoff with to_char(...'HH12:MI AM'), which
+// pads to "06:00 PM". Nobody writes the hour that way. Trimmed here rather than
+// in the database, so no settings or function signature has to change.
+const clock = (t) => (t ?? "").replace(/^0/, "");
+
+/* One way of writing an order out in words — "1 × 500g, 2 × 200g", biggest pack
+   first, the way you'd say it aloud. Used by the summary, the confirmation card
+   and the WhatsApp messages so all three always agree. `sep` is the only thing
+   that varies: WhatsApp gets the tighter "1×500g". */
+function packBreakdown(items, products, sep = " × ") {
+  return items
+    .map((it) => {
+      const p = products.find((x) => x.id === it.product_id);
+      return p ? { grams: Number(p.weight_grams), qty: it.quantity } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.grams - a.grams)
+    .map((l) => `${l.qty}${sep}${l.grams}g`)
+    .join(", ");
+}
+
 export default function OrderFlow({ info, loadError }) {
   const [qty, setQty] = useState({});
   const [date, setDate] = useState(info?.delivery_dates?.[0] ?? null);
@@ -51,16 +72,36 @@ export default function OrderFlow({ info, loadError }) {
     [qty]
   );
 
-  const subtotal = useMemo(() => {
-    if (!info) return 0;
-    return items.reduce((sum, it) => {
-      const p = info.products.find((x) => x.id === it.product_id);
-      return sum + (p ? Number(p.price) * it.quantity : 0);
-    }, 0);
+  const orderedLines = useMemo(() => {
+    if (!info) return [];
+    return items
+      .map((it) => {
+        const p = info.products.find((x) => x.id === it.product_id);
+        return p ? { ...it, product: p } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => Number(b.product.weight_grams) - Number(a.product.weight_grams));
   }, [items, info]);
 
+  const subtotal = useMemo(
+    () => orderedLines.reduce((sum, l) => sum + Number(l.product.price) * l.quantity, 0),
+    [orderedLines]
+  );
+
   const total = subtotal + Number(info?.delivery_charge ?? 0);
-  const ready = items.length > 0 && date && name.trim() && phone.trim() && areaId && flat.trim();
+
+  // Name, phone, community and flat all stay required — a delivery cannot be
+  // made without them. Only the time preference and the address note are
+  // optional, and both are marked as such.
+  const missing = [
+    items.length === 0 && "a pack",
+    !date && "a delivery day",
+    !name.trim() && "your name",
+    !phone.trim() && "your WhatsApp number",
+    !areaId && "your community",
+    !flat.trim() && "your flat or block",
+  ].filter(Boolean);
+  const ready = missing.length === 0;
 
   const waLink = (text) =>
     `https://wa.me/${info?.whatsapp_number ?? "919843327406"}?text=${encodeURIComponent(text)}`;
@@ -80,7 +121,14 @@ export default function OrderFlow({ info, loadError }) {
         p_time_preference: timePref === "earlier" || timePref === "later" ? timePref : null,
         p_address_note: addressNote.trim() || null,
       });
-      setDone(res);
+      // Snapshot what was ordered alongside the server's answer. place_order
+      // returns the reference, date and total but not the packs, and this is
+      // the one order the confirmation screen is ever allowed to speak about.
+      setDone({
+        ...res,
+        packs: packBreakdown(items, info.products, " × "),
+        packsCompact: packBreakdown(items, info.products, "×"),
+      });
       window.scrollTo({ top: 0 });
     } catch (e) {
       setError(e.message);
@@ -96,13 +144,13 @@ export default function OrderFlow({ info, loadError }) {
       <main>
         <Masthead />
         <div className="wrap">
-          <div className="err" style={{ marginTop: 28 }}>
+          <div className="err" role="alert" style={{ marginTop: 28 }}>
             We couldn&apos;t load today&apos;s ordering details. Please refresh, or
             message us on WhatsApp and we&apos;ll take your order there.
           </div>
           <div className="foot">
-            <a className="wa" href={waLink("Hi Navera, I'd like to place an order.")}>
-              WhatsApp us
+            <a className="wa" href={waLink("Hi Navera, I'd like to place an order.")} {...newTab}>
+              WhatsApp us<NewTabNote />
             </a>
           </div>
         </div>
@@ -115,16 +163,25 @@ export default function OrderFlow({ info, loadError }) {
   if (done) {
     const d = parseDate(done.delivery_date);
     const dayName = DOW_LONG[d.getDay()];
+
+    // Exactly one order — this one. Never a running list of everything the
+    // customer has ever ordered. The packs, day and amount travel with it so
+    // the message reads whole on its own.
+    const enquiry =
+      `Hi Navera, about my order ${done.reference}` +
+      `${done.packsCompact ? ` — ${done.packsCompact}` : ""}, ${dayName}, ${rupees(done.total)}.`;
+
     return (
       <main>
         <Masthead />
         <div className="wrap done">
-          <div className="tick">✓</div>
-          <h1>Thank you, {done.name.split(" ")[0]}</h1>
-          <div className="ref">{done.reference}</div>
+          <div className="tick" aria-hidden="true">
+            ✓
+          </div>
+          <h2 className="done-h">Thank you, {done.name.split(" ")[0]}</h2>
           <p className="msg">
-            Your paneer will be prepared fresh on {dayName} morning. We&apos;ll
-            confirm your delivery time on WhatsApp.
+            Your paneer will be prepared fresh on {dayName}. We&apos;ll reach out
+            on WhatsApp with more details.
           </p>
 
           <div className="card">
@@ -132,18 +189,21 @@ export default function OrderFlow({ info, loadError }) {
             <div className="v">
               {dayName}, {d.getDate()} {MON[d.getMonth()]}
             </div>
+            {done.packs && (
+              <>
+                <div className="k">Packs</div>
+                <div className="v">{done.packs}</div>
+              </>
+            )}
             <div className="k">To pay on delivery</div>
             <div className="v">{rupees(done.total)}</div>
+            <div className="ordid">Order {done.reference}</div>
           </div>
 
           <div className="foot">
-            <a
-              className="wa"
-              href={waLink(
-                `Hi Navera, this is about my order ${done.reference}.`
-              )}
-            >
+            <a className="wa" href={waLink(enquiry)} {...newTab}>
               Message us about this order
+              <NewTabNote />
             </a>
             <p className="fssai">
               Keep this page — you can reorder from it next time.
@@ -163,13 +223,15 @@ export default function OrderFlow({ info, loadError }) {
     <main>
       <Masthead />
 
+      {/* No delivery time is promised here, only the day. The time is agreed on
+          WhatsApp — see the delivery-time rule in CLAUDE.md. */}
       {info.past_cutoff ? (
         <div className="cutoff closed">
-          Today&apos;s orders have closed. Next delivery is {firstDay} morning.
+          Today&apos;s orders have closed. The next delivery day is {firstDay}.
         </div>
       ) : (
         <div className="cutoff">
-          Order before {info.cutoff_time} for {firstDay} morning
+          Order before {clock(info.cutoff_time)} for {firstDay}
           {minsLeft !== null && minsLeft <= 60 && minsLeft > 0 && (
             <span className="soon">
               Orders close in {minsLeft} minute{minsLeft === 1 ? "" : "s"}
@@ -186,7 +248,7 @@ export default function OrderFlow({ info, loadError }) {
             <h2>What would you like?</h2>
           </div>
 
-          <div className="packs">
+          <div className="packs" role="group" aria-label="Pack sizes">
             {info.products.map((p) => (
               <button
                 key={p.id}
@@ -197,11 +259,11 @@ export default function OrderFlow({ info, loadError }) {
                   setQty((q) => ({ ...q, [p.id]: (q[p.id] ?? 0) > 0 ? 0 : 1 }))
                 }
               >
-                <div className="size">{p.weight_grams}g</div>
-                <div className="price">{rupees(p.price)}</div>
-                <div className="per">
-                  {rupees(Math.round((p.price / p.weight_grams) * 1000))}/kg
-                </div>
+                <span className="chosen" aria-hidden="true">
+                  ✓
+                </span>
+                <span className="size">{p.weight_grams}g</span>
+                <span className="price">{rupees(p.price)}</span>
               </button>
             ))}
           </div>
@@ -241,9 +303,11 @@ export default function OrderFlow({ info, loadError }) {
         <section className="step">
           <div className="step-head">
             <span className="step-num">2</span>
-            <h2>Which morning?</h2>
+            <h2>Which day would you prefer to deliver?</h2>
           </div>
-          <div className="dates">
+          {/* Bleeds past the wrap so the next card is visibly cut off by the
+              screen edge — that overhang is the cue that the row scrolls. */}
+          <div className="dates" role="group" aria-label="Delivery day">
             {info.delivery_dates.map((iso) => {
               const d = parseDate(iso);
               return (
@@ -254,14 +318,17 @@ export default function OrderFlow({ info, loadError }) {
                   aria-pressed={date === iso}
                   onClick={() => setDate(iso)}
                 >
-                  <div className="dow">{DOW[d.getDay()]}</div>
-                  <div className="dnum">{d.getDate()}</div>
-                  <div className="mon">{MON[d.getMonth()]}</div>
+                  <span className="chosen" aria-hidden="true">
+                    ✓
+                  </span>
+                  <span className="dow">{DOW[d.getDay()]}</span>
+                  <span className="dnum">{d.getDate()}</span>
+                  <span className="mon">{MON[d.getMonth()]}</span>
                 </button>
               );
             })}
           </div>
-          <p className="window">Delivered fresh that morning.</p>
+          <p className="window">Prepared and delivered fresh on the day you choose.</p>
         </section>
 
         {/* 3 — details */}
@@ -277,6 +344,8 @@ export default function OrderFlow({ info, loadError }) {
               id="nm"
               value={name}
               autoComplete="name"
+              required
+              aria-required="true"
               onChange={(e) => setName(e.target.value)}
             />
           </div>
@@ -290,13 +359,21 @@ export default function OrderFlow({ info, loadError }) {
               autoComplete="tel-national"
               maxLength={10}
               placeholder="10 digits"
+              required
+              aria-required="true"
               onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
             />
           </div>
 
           <div className="field">
             <label htmlFor="ar">Community</label>
-            <select id="ar" value={areaId} onChange={(e) => setAreaId(e.target.value)}>
+            <select
+              id="ar"
+              value={areaId}
+              required
+              aria-required="true"
+              onChange={(e) => setAreaId(e.target.value)}
+            >
               <option value="">Choose your community</option>
               {info.areas.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -304,13 +381,17 @@ export default function OrderFlow({ info, loadError }) {
                 </option>
               ))}
             </select>
+            {/* New tab on purpose: tapping this must not throw away a
+                half-filled order. */}
             <a
               className="notlisted"
               href={waLink(
                 "Hi Navera, my community isn't on the list. Do you deliver to us?"
               )}
+              {...newTab}
             >
               Not listed? WhatsApp us
+              <NewTabNote />
             </a>
           </div>
 
@@ -320,14 +401,18 @@ export default function OrderFlow({ info, loadError }) {
               id="fl"
               value={flat}
               placeholder="e.g. B-302"
+              required
+              aria-required="true"
               onChange={(e) => setFlat(e.target.value)}
             />
           </div>
 
           {/* A preference, not a bookable slot — deliberately no clock times. */}
           <div className="field">
-            <span className="lbl">Preferred delivery time (optional)</span>
-            <div className="bands" role="group" aria-label="Preferred delivery time (optional)">
+            <span className="lbl" id="tp-lbl">
+              Preferred delivery time (optional)
+            </span>
+            <div className="bands" role="group" aria-labelledby="tp-lbl">
               {[
                 ["earlier", "Earlier morning"],
                 ["later", "Later morning"],
@@ -361,18 +446,15 @@ export default function OrderFlow({ info, loadError }) {
 
         {/* summary */}
         <div className="summary">
-          {items.map((it) => {
-            const p = info.products.find((x) => x.id === it.product_id);
-            return (
-              <div className="line" key={it.product_id}>
-                <span>
-                  {p.weight_grams}g × {it.quantity}
-                </span>
-                <span>{rupees(Number(p.price) * it.quantity)}</span>
-              </div>
-            );
-          })}
-          {items.length === 0 && <div className="line">No packs chosen yet</div>}
+          {orderedLines.map((l) => (
+            <div className="line" key={l.product_id}>
+              <span>
+                {l.quantity} × {l.product.weight_grams}g
+              </span>
+              <span>{rupees(Number(l.product.price) * l.quantity)}</span>
+            </div>
+          ))}
+          {orderedLines.length === 0 && <div className="line">No packs chosen yet</div>}
           {Number(info.delivery_charge) > 0 && (
             <div className="line">
               <span>Delivery</span>
@@ -385,11 +467,27 @@ export default function OrderFlow({ info, loadError }) {
           </div>
         </div>
 
-        <button className="cta" disabled={!ready || busy} onClick={submit}>
+        <button
+          className="cta"
+          disabled={!ready || busy}
+          aria-describedby={ready ? undefined : "cta-hint"}
+          onClick={submit}
+        >
           {busy ? "Placing your order…" : "Confirm fresh paneer"}
         </button>
 
-        {error && <div className="err">{error}</div>}
+        {/* A disabled button that says nothing is a dead end. Say what's left. */}
+        {!ready && (
+          <p className="cta-hint" id="cta-hint">
+            Still needed: {missing.join(", ")}.
+          </p>
+        )}
+
+        {error && (
+          <div className="err" role="alert">
+            {error}
+          </div>
+        )}
 
         {/* signature — why tomorrow */}
         <section className="thread">
@@ -401,11 +499,13 @@ export default function OrderFlow({ info, loadError }) {
           <div className="moments">
             <div className="moment">
               <div className="when">You order</div>
-              <div className="what">Before {info.cutoff_time}, for the morning you chose.</div>
+              <div className="what">Before {clock(info.cutoff_time)}, for the day you chose.</div>
             </div>
             <div className="moment">
               <div className="when">We procure fresh milk</div>
-              <div className="what">Country cow milk, brought in for your order.</div>
+              <div className="what">
+                Milk from free-roaming cared cows, brought in for your order.
+              </div>
             </div>
             <div className="moment">
               <div className="when">We prepare fresh paneer</div>
@@ -413,28 +513,38 @@ export default function OrderFlow({ info, loadError }) {
             </div>
             <div className="moment">
               <div className="when">Carefully packed</div>
-              <div className="what">Packed the same morning it is made.</div>
+              <div className="what">Packed as soon as it is made.</div>
             </div>
             <div className="moment">
               <div className="when">Delivered fresh</div>
-              <div className="what">
-                To your doorstep the morning you chose.
-              </div>
+              <div className="what">To your door on the day you chose.</div>
             </div>
           </div>
         </section>
 
         <div className="foot">
-          <a className="wa" href={waLink("Hi Navera, I have a question about your paneer.")}>
+          <a
+            className="wa"
+            href={waLink("Hi Navera, I have a question about your paneer.")}
+            {...newTab}
+          >
             Questions? WhatsApp us
+            <NewTabNote />
           </a>
           <p className="fssai">FSSAI Lic. No. 22426358000260</p>
+          {/* PENDING: the founder owes exact replacement wording for this line.
+              Left untouched deliberately — do not invent a substitute. */}
           <p className="made">Made in Koliyanur, Viluppuram. Delivered in Chennai.</p>
         </div>
       </div>
     </main>
   );
 }
+
+/* Every WhatsApp link leaves the site, and leaving mid-order would lose a
+   half-filled form. They all open in a new tab, and say so for screen readers. */
+const newTab = { target: "_blank", rel: "noopener noreferrer" };
+const NewTabNote = () => <span className="sr-only"> (opens in a new tab)</span>;
 
 function Masthead() {
   return (
@@ -450,12 +560,12 @@ function Masthead() {
         />
       </div>
       <div className="rule" />
-      <div className="lede">
-        Fresh paneer,
-        <br />
-        <em>prepared after your order.</em>
-      </div>
-      <div className="two">Country cow milk and fresh lemon. Nothing else.</div>
+      {/* "Fresh paneer" is already in the logo above — saying it again here read
+          as a stutter, so the lede is just the promise. */}
+      <h1 className="lede">
+        <em>Prepared after your order.</em>
+      </h1>
+      <p className="two">From free-roaming cared cows, around 100 km away from Chennai.</p>
     </header>
   );
 }

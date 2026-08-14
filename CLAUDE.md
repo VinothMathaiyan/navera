@@ -7,9 +7,13 @@ the full locked specification; this file is the working summary.
 ## What this is
 
 A made-to-order fresh paneer business in Koliyanur, Viluppuram, delivering to
-apartment communities in Chennai. Country cow milk + fresh lemon only — no
-vinegar, no preservatives, no additives. Prepared after the order is placed,
-not stocked. Operated by Gowri. FSSAI 22426358000260.
+apartment communities in Chennai. Milk + fresh lemon only — no vinegar, no
+preservatives, no additives. Prepared after the order is placed, not stocked.
+Operated by Gowri. FSSAI 22426358000260.
+
+The milk is described to customers as **"From free-roaming cared cows, around
+100 km away from Chennai."** — see the sourcing rule under Business rules.
+"Country cow milk" is the old wording and must not go back on the site.
 
 This repo is the customer-facing ordering site: Next.js (App Router), talking
 directly to Supabase via two RPC functions, no ORM, no auth SDK on the public
@@ -118,6 +122,19 @@ plus a valid mixed-pack order — all passed before this was trusted.
   Admin section below for the access pattern. Verified end-to-end in a
   browser against the live database — login, forecast, manual entry for both
   a new and a returning customer, and the dispatch status write.
+- **Day 4:** customer-page polish, responsive and accessibility pass. No new
+  features and no schema change — see the "Customer page" rules below for what
+  is now locked. Verified in a browser at 360 / 414 / 768 px: no horizontal
+  scroll at any width, no tap target under 44 px, every text/background pair
+  at or above WCAG AA, and all 20 focusable controls carrying a visible ring.
+  A throwaway order (NAV-003) was placed against the live database to check the
+  confirmation screen, then deleted along with its items and test customer —
+  `order_reference_seq` is consequently one ahead, so the next real order is
+  NAV-004. That gap is expected, not a bug.
+- `.claude/launch.json` already carries a `navera-dev` config, so
+  `preview_start` can run the dev server by that name. Note that `npm run
+  build` and `next dev` share `.next/`: running a build while the dev server
+  is up makes it serve 404s for its own chunks until it is restarted.
 - **Not yet deployed.** A Vercel deploy attempt hit `403: You don't have
   permission to create a project` — the connected Vercel account could read
   the existing `wellness-connect` project but not create a new one. Likely a
@@ -163,6 +180,56 @@ tables directly — the `admin manages X` policies (`ALL` / `to authenticated`
   absorbs it; expect to see that 401 in the network log even on a healthy
   login. It is not a bug to chase.
 
+### Customer page — decisions that are load-bearing, not taste
+
+- **One selected look for every choice.** Packs, delivery days and time bands
+  all share `[aria-pressed="true"]` → filled `--green`, white text, plus a
+  tick (`.chosen` badge on packs and dates, a `::before` tick on the pills).
+  The tick is not decoration: it is what keeps the selected state from being
+  carried by colour alone. The earlier white-background-plus-inset-border
+  treatment was too weak to read on a cream page — do not go back to it.
+- **`--muted` and `--mustard-dk` were darkened for contrast, not for looks.**
+  `#6A7266` → `#5F6659` (4.53:1 → 5.4:1 on cream) and `#C9971A` → `#8A6410`
+  (2.41:1 → 4.88:1). The old gold failed AA badly at the 11.5–12 px sizes it
+  is used at, and it is also the focus-ring colour, where 2.41:1 fell under
+  the 3:1 non-text minimum. A prettier, lighter gold will fail again.
+- **The date row bleeds past `.wrap` on purpose** (`margin-inline` of
+  `-1 * --pad`) and cards are sized `clamp(84px, (100% + var(--pad) - 30px) /
+  3.5, 108px)` so roughly three and a half fit at any width. The half-card
+  cut off by the screen edge is the only cue that the row scrolls. A fixed
+  card width landed at 98% of a card on a 414 px phone, which reads as a
+  rendering glitch rather than an invitation to swipe.
+- **The timeline dot and its connector both derive from `--dot` / `--gut` /
+  `--lw` / `--top` on `.moments`.** The connector is per-step (`.moment::after`,
+  suppressed on the last), running dot-bottom to next-dot-top, rather than one
+  line down the whole column — that older version overshot the first and last
+  dots and drifted whenever a step's text wrapped.
+- **Packs are written "1 × 500g, 2 × 200g", biggest first, everywhere**:
+  the live order summary, the confirmation card, the customer's WhatsApp
+  message and both admin templates. `packBreakdown()` in `app/OrderFlow.js`
+  is the one implementation; the admin has its own two-line equivalent because
+  it reads from `order_items` rather than from form state.
+- **A customer-side "message us" link carries exactly one order** — the one
+  on screen. Worth knowing before hunting for a bug here: the founder saw a
+  WhatsApp draft reading "…NAV-001 … NAV-002" and reported it as
+  concatenation, but nothing in this repo has ever joined references. Each
+  link is built from a single `reference`. WhatsApp itself **appends** a
+  `wa.me?text=` payload to whatever unsent draft is already sitting in that
+  chat, and the two test orders had been opened one after the other without
+  sending. The site cannot clear WhatsApp's composer. What it can do — and now
+  does — is make each message self-contained (reference + packs + day +
+  amount), so even an appended draft stays readable. If this is reported
+  again, check the composer before changing code.
+- **Every WhatsApp link on the customer page opens in a new tab.** Not just
+  "Not listed?" — leaving the site mid-order throws away a half-filled form
+  from any of them.
+- `clock()` trims the leading zero off `cutoff_time`, because
+  `get_ordering_info` formats it with `to_char(...'HH12:MI AM')` and renders
+  "06:00 PM". Done in the page so no function signature has to change.
+- The masthead lede is the page's `<h1>` and the confirmation's "Thank you"
+  is an `<h2>`. Before this there was no `h1` at all. The lede also no longer
+  says "Fresh paneer" — the logo image directly above it already does.
+
 ## Business rules currently in effect
 
 - Cutoff: 6:00 PM the day before delivery — governs ordering, and will
@@ -192,6 +259,26 @@ tables directly — the `admin manages X` policies (`ALL` / `to authenticated`
     a check constraint) and `orders.address_note` (free text). Both nullable
     and both genuinely optional — an order with neither must always place
     exactly as before.
+  - **Extended 2026-08-13: the word "morning" is gone from the customer page
+    and from the admin WhatsApp templates too.** It used to appear in the
+    cutoff bar, the date step, the timeline and the confirmation ("delivered
+    Friday morning"), which is still a time promise even without clock times.
+    The page now commits to a *day* and nothing more. The only surviving
+    "morning" is inside the two preference labels — *Earlier morning* /
+    *Later morning* — which are the customer's own words for what they'd
+    prefer, not ours for what we'll do. Those two stay.
+- **Sourcing claim (founder-confirmed, 2026-08-13).** The customer-facing
+  wording is exactly: **"From free-roaming cared cows, around 100 km away from
+  Chennai."** It replaced "Country cow milk and fresh lemon. Nothing else." in
+  the masthead, and "Country cow milk, brought in for your order." in the
+  timeline (now "Milk from free-roaming cared cows, brought in for your
+  order."), and the `<meta name="description">` in `app/layout.js`. "Nothing
+  else goes in" survives on the timeline's paneer-making step, so the
+  no-additives promise is not lost. Do not reintroduce "country cow".
+- **The footer line "Made in Koliyanur, Viluppuram. Delivered in Chennai." is
+  pending replacement.** The founder owes exact wording and asked for it to be
+  left alone until then. It is marked with a PENDING comment in
+  `app/OrderFlow.js`. Do not invent a substitute.
 - Areas: Casagrand, Castle, Airview, Navins Jayram. "Casagrand" is known to
   possibly need a more specific name (e.g. "Casagrand Irena") later — left
   as-is for now, flagged, not yet changed.

@@ -821,31 +821,39 @@ function OrderCard({ order, settings, onDispatched, onExpired }) {
   const link = (text) =>
     `https://wa.me/${waNumber}?text=${encodeURIComponent(text)}`;
 
-  // These templates no longer quote settings.delivery_window. The business
-  // stopped promising a fixed window, and a pre-filled "between 6:30 and 8:30"
-  // would put that promise straight back — just over WhatsApp instead of the
-  // site. Confirm now opens the time conversation, echoing the customer's own
-  // stated preference so the founder isn't retyping it.
+  // "1 × 500g, 2 × 200g" — same phrasing the customer sees on their
+  // confirmation, so the card, the WhatsApp message and their screen all read
+  // the same way and there is nothing to translate between them.
+  const packs = (order.items ?? [])
+    .slice()
+    .sort((a, b) => b.weight_grams - a.weight_grams)
+    .map((i) => `${i.quantity} × ${i.weight_grams}g`)
+    .join(", ");
+
+  // These templates no longer quote settings.delivery_window, and no longer say
+  // "morning" either. The business stopped promising a delivery time, and a
+  // pre-filled one would put that promise straight back — just over WhatsApp
+  // instead of the site. Confirm opens the time conversation, echoing the
+  // customer's own stated preference so the founder isn't retyping it.
   const prefEcho = order.time_preference
     ? ` You asked for ${
         order.time_preference === "earlier" ? "earlier" : "later"
       } in the morning — we'll aim for that.`
     : "";
 
+  // Both messages carry the whole order, not just its number: the customer
+  // should not have to go and look up what NAV-002 was.
+  const packEcho = packs ? ` — ${packs}` : "";
+
   const confirmText =
     `Hi ${firstName}, this is Navera. Your order ${order.reference} is confirmed for ` +
-    `${shortDate(order.delivery_date)} morning.${prefEcho} ` +
-    `${rupees(order.total)} to pay on delivery. I'll confirm the delivery time with you closer to the day. Thank you!`;
+    `${shortDate(order.delivery_date)}${packEcho}. ` +
+    `${rupees(order.total)} to pay on delivery.${prefEcho} ` +
+    `I'll confirm the delivery time with you closer to the day. Thank you!`;
 
   const dispatchText =
-    `Hi ${firstName}, your Navera order ${order.reference} is packed and on its way ` +
-    `this morning. ${rupees(order.total)} to pay on delivery.`;
-
-  const packs = (order.items ?? [])
-    .slice()
-    .sort((a, b) => a.weight_grams - b.weight_grams)
-    .map((i) => `${i.weight_grams}g × ${i.quantity}`)
-    .join(", ");
+    `Hi ${firstName}, your Navera order ${order.reference} is packed and on its way` +
+    `${packEcho}. ${rupees(order.total)} to pay on delivery.`;
 
   // The Dispatch link navigates immediately, same as Confirm — a real anchor
   // click, not blocked by popup heuristics. The status write runs alongside
