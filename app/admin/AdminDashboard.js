@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { currentSession, db, signIn, signOut, SessionExpired } from "../../lib/admin";
+import { computeForecast } from "./forecast";
+import Settings from "./Settings";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DOW_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -85,6 +87,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [entryOpen, setEntryOpen] = useState(false);
+  const [view, setView] = useState("dashboard");
 
   // localStorage can only be read after mount, or server and client HTML differ.
   useEffect(() => {
@@ -163,37 +166,9 @@ export default function AdminDashboard() {
 
   /* ------------------------------------------------ forecast */
 
-  const forecast = useMemo(() => {
-    // A cancelled order must not pull milk into the forecast.
-    const live = orders.filter((o) => o.status !== "cancelled");
-
-    const bySize = new Map();
-    let grams = 0;
-    let packs = 0;
-
-    for (const order of live) {
-      for (const item of order.items ?? []) {
-        const qty = Number(item.quantity) || 0;
-        bySize.set(item.weight_grams, (bySize.get(item.weight_grams) ?? 0) + qty);
-        grams += Number(item.weight_grams) * qty;
-        packs += qty;
-      }
-    }
-
-    const kg = grams / 1000;
-    // litres_per_kg is admin-editable in settings and is never assumed here.
-    const perKg = Number(settings?.litres_per_kg ?? 0);
-
-    return {
-      bySize: [...bySize.entries()].sort((a, b) => a[0] - b[0]),
-      kg,
-      packs,
-      litres: kg * perKg,
-      perKg,
-      orderCount: live.length,
-      cancelled: orders.length - live.length,
-    };
-  }, [orders, settings]);
+  // Both litres-per-kg and lemons-per-litre are admin-editable rows, never
+  // assumed here. See ./forecast.js for the maths and the rounding rule.
+  const forecast = useMemo(() => computeForecast(orders, settings), [orders, settings]);
 
   /* ------------------------------------------------ render */
 
@@ -227,6 +202,38 @@ export default function AdminDashboard() {
         </button>
       </header>
 
+      <nav className="ad-tabs" aria-label="Admin sections">
+        <button
+          type="button"
+          className="ad-tab"
+          aria-pressed={view === "dashboard"}
+          onClick={() => setView("dashboard")}
+        >
+          Dashboard
+        </button>
+        <button
+          type="button"
+          className="ad-tab"
+          aria-pressed={view === "settings"}
+          onClick={() => setView("settings")}
+        >
+          Settings
+        </button>
+      </nav>
+
+      {view === "settings" ? (
+        <div className="ad-wrap">
+          {error && <div className="ad-err">{error}</div>}
+          <Settings
+            settings={settings}
+            onExpired={dropToLogin}
+            // Push the saved row straight back into state so the forecast and
+            // the delivery-date row re-derive from it immediately, rather than
+            // waiting for a reload to catch up with what was just saved.
+            onSaved={setSettings}
+          />
+        </div>
+      ) : (
       <div className="ad-wrap">
         {/* delivery date */}
         <section className="ad-section">
@@ -267,15 +274,25 @@ export default function AdminDashboard() {
             <span className="ad-fc-date">{date ? shortDate(date) : ""}</span>
           </div>
 
+          {/* Two shopping numbers, equal weight — this is what gets bought. */}
           <div className="ad-hero">
-            <div className="ad-hero-n">
-              {forecast.litres.toLocaleString("en-IN", { maximumFractionDigits: 1 })}
+            <div className="ad-hero-fig">
+              <div className="ad-hero-n">
+                {forecast.litres.toLocaleString("en-IN", { maximumFractionDigits: 1 })}
+              </div>
+              <div className="ad-hero-l">litres of milk</div>
             </div>
-            <div className="ad-hero-l">litres of milk required</div>
-            <div className="ad-hero-sub">
-              {forecast.kg.toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg paneer
-              {forecast.perKg > 0 && <> · {forecast.perKg} litres per kg</>}
+            <div className="ad-hero-fig">
+              <div className="ad-hero-n">{forecast.lemons}</div>
+              <div className="ad-hero-l">
+                lemon{forecast.lemons === 1 ? "" : "s"}
+              </div>
             </div>
+          </div>
+          <div className="ad-hero-sub">
+            {forecast.kg.toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg paneer
+            {forecast.perKg > 0 && <> · {forecast.perKg} litres per kg</>}
+            {forecast.litres > 0 && <> · {forecast.perLitre} lemon per litre, rounded up</>}
           </div>
 
           <div className="ad-fc-grid">
@@ -354,6 +371,7 @@ export default function AdminDashboard() {
           ))}
         </section>
       </div>
+      )}
     </main>
   );
 }

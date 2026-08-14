@@ -85,6 +85,33 @@
   padding: 0 18px 64px;
 }
 
+/* ---------------- section tabs ---------------- */
+
+.ad-tabs {
+  display: flex;
+  gap: 4px;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 12px 18px 0;
+}
+.ad-tab {
+  flex: 1 1 0;
+  min-height: 44px;
+  background: none;
+  border: 0;
+  border-bottom: 2.5px solid transparent;
+  padding: 10px 8px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.ad-tab:hover { color: var(--green); }
+.ad-tab[aria-pressed="true"] {
+  color: var(--green);
+  border-bottom-color: var(--green);
+}
+
 .ad-section { margin-top: 26px; }
 .ad-h {
   font-size: 13px;
@@ -183,14 +210,20 @@
 .ad-fc-head h2 { font-size: 18px; color: var(--cream); }
 .ad-fc-date { font-size: 12.5px; color: #a9c0af; white-space: nowrap; }
 
+/* Milk and lemons sit side by side at equal weight — they are the two things
+   that actually get bought, and one without the other fails the batch. */
 .ad-hero {
-  text-align: center;
-  padding: 18px 0 15px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  display: flex;
+  align-items: stretch;
+  padding: 18px 0 4px;
 }
+.ad-hero-fig { flex: 1 1 0; text-align: center; min-width: 0; }
+.ad-hero-fig + .ad-hero-fig { border-left: 1px solid rgba(255, 255, 255, 0.14); }
 .ad-hero-n {
   font-family: var(--font-display);
-  font-size: 54px;
+  /* Two numbers now share the row, so it flexes rather than sitting at 54px
+     and overflowing a three-digit litre count on a 360px handset. */
+  font-size: clamp(38px, 12vw, 54px);
   line-height: 1;
   color: var(--mustard);
   font-variant-numeric: tabular-nums;
@@ -201,7 +234,14 @@
   letter-spacing: 0.05em;
   color: #c4d5c8;
 }
-.ad-hero-sub { margin-top: 7px; font-size: 13px; color: #a9c0af; }
+.ad-hero-sub {
+  margin-top: 7px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 13px;
+  color: #a9c0af;
+  text-align: center;
+}
 
 .ad-fc-grid {
   display: flex;
@@ -521,3 +561,90 @@
   padding: 3px 9px;
 }
 .ad-status.st-dispatched { background: #fdecc8; color: var(--cocoa); }
+
+/* ---------------- settings ---------------- */
+
+.ad-settings { padding-top: 22px; }
+
+.ad-settings-lede {
+  margin: 0 0 22px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+  border-left: 2.5px solid var(--sage);
+  padding-left: 12px;
+}
+
+.ad-settings .ad-h { margin-top: 26px; }
+.ad-settings .ad-h:first-of-type { margin-top: 0; }
+
+.ad-fieldnote {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.ad-fieldnote strong { color: var(--cocoa); }
+
+/* Two numbers to a row on anything wider than a very small phone; they are
+   short fields and a full-width stack wastes a lot of thumb travel. */
+.ad-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+@media (max-width: 359px) {
+  .ad-pair { grid-template-columns: 1fr; }
+}
+
+/* Seven across at any width — 1fr columns rather than a fixed width, so a
+   360px handset gets ~42px cells instead of a wrapped eighth row. */
+.ad-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+.ad-day {
+  min-height: 46px;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 6px 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.ad-day:hover { border-color: var(--green-soft); }
+/* Same selected language as everywhere else: filled green, light text, tick.
+   The tick is what keeps the state off colour alone. */
+.ad-day[aria-pressed="true"] {
+  background: var(--green);
+  border-color: var(--green-deep);
+  color: #fff;
+}
+.ad-day[aria-pressed="true"]::after {
+  content: "✓";
+  display: block;
+  font-size: 10px;
+  line-height: 1;
+  margin-top: 3px;
+  color: var(--mustard);
+}
+
+.ad-warn {
+  margin: 10px 0 0;
+  background: #fdf6e3;
+  border-left: 2.5px solid var(--mustard-dk);
+  border-radius: 0 var(--r-s) var(--r-s) 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--cocoa);
+}
+.ad-warn-later {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.ad-settings .cta { margin-top: 24px; }
+.ad-settings .ad-err div + div { margin-top: 3px; }

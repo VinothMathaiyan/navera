@@ -51,8 +51,9 @@ says "Fresh Paneer, Every Week" instead of subscription.
 
 ### Schema (8 tables, RLS on all of them)
 
-`settings` (single row — cutoff, delivery days, window, litres/kg, min order,
-delivery charge — all admin-editable, never hardcode these), `delivery_areas`,
+`settings` (single row — cutoff, delivery days, window, litres/kg, lemons/litre,
+min order, delivery charge — all admin-editable from `/admin` → Settings since
+2026-08-14, never hardcode these), `delivery_areas`,
 `products`, `customers` (phone is identity, `access_token` is the private
 "My Navera" link — no passwords, no OTP), `orders` (NAV-001 style reference),
 `order_items`, `subscriptions`, `subscription_skips`.
@@ -135,6 +136,18 @@ plus a valid mixed-pack order — all passed before this was trusted.
   1, so **the first real customer gets NAV-001**. There is no reference gap any
   more; earlier notes in this file about the sequence running ahead are
   superseded. `settings`, `products` and `delivery_areas` were untouched.
+- **Day 5:** the admin **Settings** screen (`app/admin/Settings.js`) and a
+  **lemon** figure on the forecast. `/admin` now has two tabs, Dashboard and
+  Settings. Settings edits cutoff time, delivery days, litres per kg, lemons
+  per litre, minimum order, delivery charge and the internal delivery-window
+  note, writing straight to the `settings` singleton. Forecast maths moved out
+  of the component into `app/admin/forecast.js` so it can be exercised on its
+  own. Verified: 8 maths cases pass including the founder's measured batch
+  (1 kg → 8.5 L → 9 lemons), the same module re-run against real database rows
+  agrees with the SQL answer, and a committed delivery-day change was seen to
+  add and then remove Wednesday on the live customer page with no redeploy.
+  Admin CSS checked at 360 and 768 px — no overflow, seven weekday cells on one
+  row, 11 text/background pairs all at WCAG AA.
 - `.claude/launch.json` already carries a `navera-dev` config, so
   `preview_start` can run the dev server by that name. Note that `npm run
   build` and `next dev` share `.next/`: running a build while the dev server
@@ -162,6 +175,30 @@ tables directly — the `admin manages X` policies (`ALL` / `to authenticated`
 - `anon` has **no table GRANT at all** on customers/orders/order_items — a
   direct REST read fails with `42501` before RLS is even consulted. Worth
   knowing: it means a broken RLS policy alone cannot leak those tables.
+- **`settings`, `products` and `delivery_areas` are now hardened the same way**
+  (fixed 2026-08-14). They used to grant `anon` the full DML set
+  (INSERT/UPDATE/DELETE/TRUNCATE) with only a SELECT policy, so RLS alone stood
+  between the public key and those tables — an anon `PATCH /settings` returned
+  `200 []` (zero rows, nothing written) rather than being refused outright.
+  `products` made it worth fixing: `place_order` prices every order from that
+  table, so one mis-scoped policy would have meant free paneer.
+  `insert, update, delete, truncate` were revoked from `anon` on all three.
+  - `anon` now holds only `REFERENCES, SELECT, TRIGGER` on them. Verified over
+    real HTTP: PATCH on all three, plus DELETE on products and INSERT on
+    delivery_areas, every one refused with `42501 permission denied` **before
+    RLS is consulted** — the same belt-and-braces posture as
+    customers/orders/order_items.
+  - Reads are untouched and must stay that way: `GET settings`, `products`,
+    `delivery_areas` all still `200`, and `get_ordering_info()` still returns
+    its full payload. The public path only ever reads, which is why nothing
+    needed those write grants.
+  - **Admin is unaffected** — `authenticated` keeps full DML, re-tested after
+    the revoke by updating `settings` as that role. If the Settings screen ever
+    starts failing with `42501`, the revoke was applied too broadly; it should
+    only ever have touched `anon`.
+  - Note when testing this: a `PATCH` with an empty `{}` body is a PostgREST
+    no-op that returns `204` **without** reaching the permission check. Send a
+    real column value or the test proves nothing.
 - **Manual entry deliberately ignores the 6 PM cutoff.** The cutoff governs
   what *customers* may do; a WhatsApp order has already arrived, and refusing
   to record it is what breaks the milk forecast in the first place. This is
@@ -183,6 +220,43 @@ tables directly — the `admin manages X` policies (`ALL` / `to authenticated`
   new token propagates. `lib/admin.js` refreshes and retries once, which
   absorbs it; expect to see that 401 in the network log even on a healthy
   login. It is not a bug to chase.
+
+#### Settings screen (`app/admin/Settings.js`)
+
+- It PATCHes `settings?id=eq.true` directly with the admin's JWT. That is the
+  correct pattern here — **do not** wrap it in a `SECURITY DEFINER` function.
+- `updated_at` is maintained by the `settings_touch` BEFORE UPDATE trigger, so
+  the screen must not send it.
+- `cutoff_time` is a `time` column: PostgREST returns `"18:00:00"`, and
+  `<input type="time">` speaks `"HH:MM"`. `toTimeInput` / `toTimeColumn` convert
+  in both directions — don't drop the seconds on the way back in.
+- **Delivery days are 0=Sunday**, matching `extract(dow)` and the existing
+  `settings.delivery_days` array. Do not renumber to Monday-first.
+- Saving with **zero delivery days is blocked**, and that is a refusal rather
+  than a warning: `get_ordering_info` would return an empty date list and no
+  customer could order at all. Same for a non-positive litres-per-kg or
+  lemons-per-litre, which would render a zero or NaN forecast.
+- **`delivery_window` is an internal note and nothing more.** It is edited here
+  for the founder's own reference, and the screen says so. The customer page
+  does not read it and the WhatsApp templates no longer quote it — see the
+  no-fixed-window rule. If anything ever starts rendering it to a customer,
+  that is the retired promise coming back.
+- **TODO(subscriptions), deliberately left as a hook:** removing a delivery day
+  currently shows a warning only. Once weekly delivery exists it must become a
+  real check — look for active subscriptions on the removed weekday and make
+  the admin move or pause them before the save goes through. The comment sits
+  on the `removed` computation in `Settings.js`, which is where the check
+  belongs. There are no subscriptions today, so there is genuinely nothing to
+  check yet; do not ship weekly delivery without turning that warning into a
+  block.
+
+#### Forecast maths (`app/admin/forecast.js`)
+
+- Pulled out of `AdminDashboard` so the numbers that decide how much milk gets
+  bought can be tested without rendering anything. `computeForecast(orders,
+  settings)` takes the rows exactly as `ORDER_SELECT` returns them — note that
+  PostgREST hands back numerics as **strings**, which is what the tests pin.
+- Cancelled orders are excluded from every figure, as before.
 
 ### Customer page — decisions that are load-bearing, not taste
 
@@ -318,6 +392,15 @@ tables directly — the `admin manages X` policies (`ALL` / `to authenticated`
   without an explicit new instruction.
 - No delivery charge, no minimum order (both editable in `settings` if that
   changes).
+- **Lemons: 1 per litre of milk, always rounded UP to a whole lemon**
+  (founder decision, 2026-08-14). Stored as `settings.lemons_per_litre` and
+  editable from the Settings screen, because a forecast figure is exactly the
+  kind of number that must not be hardcoded. The rounding direction is the
+  point, not an accident: from a real batch, 5 lemons did **not** set 8.5 L and
+  7–8 did, so one-per-litre rounded up puts 8.5 L at 9 — deliberately a little
+  over. Running short fails the batch; a spare lemon costs a few rupees.
+  **Do not "improve" `Math.ceil` to `Math.round`.** Tune the ratio in settings
+  if real batches disagree, never the rounding.
 - **No "A2 protein" claim anywhere on the site.** It appears on the existing
   banner but was deliberately excluded here — A2 is a breed-specific,
   substantiation-requiring claim and the decision was to drop it, not to
