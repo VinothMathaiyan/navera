@@ -127,10 +127,14 @@ plus a valid mixed-pack order — all passed before this was trusted.
   is now locked. Verified in a browser at 360 / 414 / 768 px: no horizontal
   scroll at any width, no tap target under 44 px, every text/background pair
   at or above WCAG AA, and all 20 focusable controls carrying a visible ring.
-  A throwaway order (NAV-003) was placed against the live database to check the
-  confirmation screen, then deleted along with its items and test customer —
-  `order_reference_seq` is consequently one ahead, so the next real order is
-  NAV-004. That gap is expected, not a bug.
+  A throwaway order was placed against the live database to check the
+  confirmation screen, then deleted.
+- **The database was wiped clean on 2026-08-14**, after the last round of
+  testing: every customer, order and order_item deleted, and
+  `order_reference_seq` restarted at 1. Verified — the next `nextval()` returns
+  1, so **the first real customer gets NAV-001**. There is no reference gap any
+  more; earlier notes in this file about the sequence running ahead are
+  superseded. `settings`, `products` and `delivery_areas` were untouched.
 - `.claude/launch.json` already carries a `navera-dev` config, so
   `preview_start` can run the dev server by that name. Note that `npm run
   build` and `next dev` share `.next/`: running a build while the dev server
@@ -217,9 +221,17 @@ tables directly — the `admin manages X` policies (`ALL` / `to authenticated`
   `wa.me?text=` payload to whatever unsent draft is already sitting in that
   chat, and the two test orders had been opened one after the other without
   sending. The site cannot clear WhatsApp's composer. What it can do — and now
-  does — is make each message self-contained (reference + packs + day +
-  amount), so even an appended draft stays readable. If this is reported
-  again, check the composer before changing code.
+  does — is make each message self-contained (reference + packs + delivery date
+  + amount), so even an appended draft stays readable.
+  - **It was reported a second time on 2026-08-14**, as a "duplicate greeting"
+    ("Hi Navera, I have a question about your paneer.Hi Navera, about my order
+    NAV-004 …"). Same root cause: that string is the *general enquiry* template
+    followed by the *confirmation* template, i.e. two different links opened
+    into one composer without sending. No single link in this repo has ever
+    emitted two greetings — measured in the browser, every `wa.me` href on the
+    page contains exactly one "Hi Navera". **Before changing any code for this,
+    clear the WhatsApp composer and re-test.** A third report is still not a
+    code bug.
 - **Every WhatsApp link on the customer page opens in a new tab.** Not just
   "Not listed?" — leaving the site mid-order throws away a half-filled form
   from any of them.
@@ -242,9 +254,10 @@ tables directly — the `admin manages X` policies (`ALL` / `to authenticated`
   not offering a choice of slots"). Changed on 2026-08-12 as a deliberate
   founder decision, not a regression — if you find the old window missing
   from the customer page, that is correct and must not be "restored".
-  - The customer optionally states a rough preference — *Earlier morning* /
-    *Later morning* / *No preference* — and the real time is agreed
-    human-to-human on WhatsApp.
+  - The customer optionally states a rough preference — *Morning* / *Evening* /
+    *No preference* — and the real time is agreed human-to-human on WhatsApp.
+    (Renamed 2026-08-14 from *Earlier morning* / *Later morning*, which only
+    ever offered two halves of the same morning. Evening is now a real choice.)
   - These are **preferences, not bookable slots.** Never show clock times
     against them and never word them as a guarantee. The helper line is
     "We'll try to match it and confirm on WhatsApp."
@@ -255,18 +268,35 @@ tables directly — the `admin manages X` policies (`ALL` / `to authenticated`
     puts the retired promise straight back — just over WhatsApp instead of
     the site. Confirm now echoes the customer's own stated preference and
     says the time will be confirmed closer to the day.
-  - Stored on `orders.time_preference` (`'earlier'` / `'later'` / null, with
+  - Stored on `orders.time_preference` (`'morning'` / `'evening'` / null, with
     a check constraint) and `orders.address_note` (free text). Both nullable
     and both genuinely optional — an order with neither must always place
     exactly as before.
+  - **`place_order` coerces an unrecognised preference to null — it does not
+    raise, and that is deliberate.** Verified again on 2026-08-14 by calling
+    the function with `'afternoon'`: the order was accepted and the column
+    stored **null**, never `'afternoon'`. This reads like a validation gap and
+    has already been reported as one once. It is not. The rule is *never refuse
+    an order over a cosmetic field* — the preference is re-agreed on WhatsApp
+    anyway, so dropping it costs nothing while refusing costs a sale. The
+    morning/evening rename is the exact scenario it protects: had the database
+    migration lagged the frontend by a minute, hard rejection would have
+    refused **every** website order instead of quietly dropping a soft
+    preference. The table's `CHECK (time_preference = ANY (ARRAY['morning',
+    'evening']))` is the real guard on what can be stored. Do not "fix" the
+    coercion into a `raise` without a fresh founder decision.
   - **Extended 2026-08-13: the word "morning" is gone from the customer page
     and from the admin WhatsApp templates too.** It used to appear in the
     cutoff bar, the date step, the timeline and the confirmation ("delivered
     Friday morning"), which is still a time promise even without clock times.
     The page now commits to a *day* and nothing more. The only surviving
-    "morning" is inside the two preference labels — *Earlier morning* /
-    *Later morning* — which are the customer's own words for what they'd
-    prefer, not ours for what we'll do. Those two stay.
+    "morning" is the *Morning* preference button — the customer's own word for
+    what they'd prefer, not ours for what we'll do. That one stays.
+- **The cutoff bar carries the date, not just the weekday** (2026-08-14):
+  "Order before 6:00 PM for Sunday, 16 Aug". "for Sunday" alone was ambiguous
+  between weeks. The date is derived from `info.delivery_dates[0]` — the same
+  backend-computed value the date picker uses — so there is one source of
+  truth and no second date calculation to drift.
 - **Sourcing claim (founder-confirmed, 2026-08-13).** The customer-facing
   wording is exactly: **"From free-roaming cared cows, around 100 km away from
   Chennai."** It replaced "Country cow milk and fresh lemon. Nothing else." in
@@ -275,10 +305,11 @@ tables directly — the `admin manages X` policies (`ALL` / `to authenticated`
   order."), and the `<meta name="description">` in `app/layout.js`. "Nothing
   else goes in" survives on the timeline's paneer-making step, so the
   no-additives promise is not lost. Do not reintroduce "country cow".
-- **The footer line "Made in Koliyanur, Viluppuram. Delivered in Chennai." is
-  pending replacement.** The founder owes exact wording and asked for it to be
-  left alone until then. It is marked with a PENDING comment in
-  `app/OrderFlow.js`. Do not invent a substitute.
+- **The footer line "Made in Koliyanur, Viluppuram. Delivered in Chennai." was
+  removed outright on 2026-08-14** and is not pending replacement any more. The
+  founder decided against footer wording entirely. The footer is now the
+  WhatsApp button and the FSSAI licence line, nothing else. Do not reinstate a
+  location line or invent a substitute.
 - Areas: Casagrand, Castle, Airview, Navins Jayram. "Casagrand" is known to
   possibly need a more specific name (e.g. "Casagrand Irena") later — left
   as-is for now, flagged, not yet changed.
