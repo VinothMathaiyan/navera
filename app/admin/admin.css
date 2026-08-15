@@ -560,7 +560,199 @@
   border-radius: 100px;
   padding: 3px 9px;
 }
-.ad-status.st-dispatched { background: #fdecc8; color: var(--cocoa); }
+.ad-status.st-confirmed  { background: var(--sage);  color: var(--green-deep); }
+.ad-status.st-preparing  { background: #fdecc8; color: var(--cocoa); }
+.ad-status.st-dispatched { background: #dcf3e0; color: #1a5c33; }
+.ad-status.st-delivered  { background: var(--green); color: var(--cream); }
+.ad-status.st-cancelled  { background: #f6e3de; color: var(--danger); }
+
+/* ---------------- per-order status controls ---------------- */
+
+.ad-order-steps { display: flex; gap: 9px; margin-top: 12px; }
+.ad-step {
+  flex: 1 1 0;
+  min-height: 44px;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 10px 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ad-step:hover:not(:disabled) { border-color: var(--green-soft); }
+.ad-step:disabled { opacity: 0.4; cursor: default; }
+.ad-step.is-primary { background: var(--green); border-color: var(--green-deep); color: #fff; }
+.ad-step.is-danger  { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+.ad-cancel-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 4px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.ad-cancel-link:hover { color: var(--danger); }
+
+.ad-confirm {
+  margin-top: 11px;
+  background: #f6e3de;
+  border-radius: var(--r-s);
+  padding: 12px 13px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--danger);
+}
+.ad-confirm-actions { display: flex; gap: 9px; margin-top: 10px; }
+
+/* ---------------- production table ---------------- */
+
+/* The table is wider than a 360px handset. It scrolls inside its own box so
+   the page itself never scrolls sideways. */
+.ad-tablewrap {
+  overflow-x: auto;
+  margin-inline: -18px;
+  padding: 2px 18px 4px;
+}
+.ad-table {
+  width: 100%;
+  min-width: 420px;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+}
+.ad-table caption { text-align: left; }
+.ad-table th, .ad-table td {
+  padding: 9px 6px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.ad-table thead th {
+  font-size: 11.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+.ad-table .num { text-align: right; }
+.ad-table tbody th { font-weight: 600; color: var(--ink); }
+.ad-table .soft { color: var(--muted); }
+.ad-table .strong { font-weight: 700; color: var(--green); }
+.ad-table tbody tr.is-today { background: #fdf6e3; }
+.ad-today {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mustard-dk);
+  font-weight: 700;
+}
+.ad-table tfoot th, .ad-table tfoot td {
+  border-top: 2px solid var(--green);
+  border-bottom: 0;
+  padding-top: 11px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.ad-undo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  background: var(--sage);
+  border-radius: var(--r-s);
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--green-deep);
+}
+
+.ad-bulk { display: flex; flex-direction: column; gap: 9px; margin-top: 16px; }
+.ad-bulk-btn {
+  width: 100%;
+  min-height: 48px;
+  background: var(--mustard);
+  color: var(--cocoa);
+  border: 0;
+  border-radius: var(--r-s);
+  padding: 13px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ad-bulk-btn:disabled { opacity: 0.6; cursor: default; }
+
+/* ---------------- communities ---------------- */
+
+.ad-areas { margin-top: 30px; padding-top: 24px; border-top: 1px solid var(--line); }
+
+.ad-arealist { list-style: none; margin: 0; padding: 0; }
+.ad-area {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.ad-area.is-off { background: transparent; border-style: dashed; }
+.ad-area.is-off .ad-area-name { color: var(--muted); }
+.ad-area-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ad-area-name { font-size: 15px; font-weight: 600; color: var(--ink); }
+.ad-area-meta { font-size: 12px; color: var(--muted); }
+.ad-area-actions { display: flex; gap: 7px; flex: 0 0 auto; }
+
+.ad-mini {
+  min-height: 44px;
+  background: none;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--green);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ad-mini:hover:not(:disabled) { border-color: var(--green-soft); }
+.ad-mini:disabled { opacity: 0.45; cursor: default; }
+.ad-mini.is-primary { background: var(--green); border-color: var(--green-deep); color: #fff; }
+
+.ad-area-edit { display: flex; gap: 7px; width: 100%; }
+.ad-area-edit input {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: #fff;
+  border: 1.5px solid var(--green-soft);
+  border-radius: var(--r-s);
+  padding: 10px 11px;
+  font-size: 15px;
+}
+
+.ad-area-add { display: flex; gap: 8px; margin-top: 14px; }
+.ad-area-add input {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 11px 12px;
+  font-size: 16px; /* 16px stops iOS zooming on focus */
+}
 
 /* ---------------- settings ---------------- */
 

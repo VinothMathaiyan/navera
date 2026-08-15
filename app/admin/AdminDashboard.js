@@ -4,6 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { currentSession, db, signIn, signOut, SessionExpired } from "../../lib/admin";
 import { computeForecast } from "./forecast";
 import Settings from "./Settings";
+import Areas from "./Areas";
+import Production from "./Production";
+import {
+  nextDeliveryDates,
+  nextStatus,
+  prevStatus,
+  STATUS_LABEL,
+} from "./production-summary";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DOW_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -104,42 +112,42 @@ export default function AdminDashboard() {
 
   /* ------------------------------------------------ reference data */
 
-  useEffect(() => {
+  // Extracted from the boot effect so the Communities screen can re-run it
+  // after adding or toggling an area — otherwise the manual-entry dropdown
+  // keeps showing the old list until a reload.
+  const loadReference = useCallback(async () => {
     if (!session) return;
-    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    try {
+      const [settingsRows, productRows, areaRows] = await Promise.all([
+        db("settings?select=*&limit=1"),
+        db("products?select=id,name,weight_grams,price&is_active=eq.true&order=sort_order"),
+        // Active only: this feeds the manual-entry dropdown, which must match
+        // what a customer can choose. The Communities screen does its own,
+        // unfiltered read.
+        db("delivery_areas?select=id,name&is_active=eq.true&order=sort_order"),
+      ]);
 
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [settingsRows, productRows, areaRows] = await Promise.all([
-          db("settings?select=*&limit=1"),
-          db("products?select=id,name,weight_grams,price&is_active=eq.true&order=sort_order"),
-          db("delivery_areas?select=id,name&is_active=eq.true&order=sort_order"),
-        ]);
-        if (cancelled) return;
+      const s = settingsRows?.[0] ?? null;
+      setSettings(s);
+      setProducts(productRows ?? []);
+      setAreas(areaRows ?? []);
 
-        const s = settingsRows?.[0] ?? null;
-        setSettings(s);
-        setProducts(productRows ?? []);
-        setAreas(areaRows ?? []);
-
-        const today = todayISO(s?.timezone ?? "Asia/Kolkata");
-        const upcoming = upcomingDeliveryDates(s?.delivery_days, today);
-        setDate((d) => d ?? upcoming[0] ?? today);
-      } catch (e) {
-        if (cancelled) return;
-        if (e instanceof SessionExpired) dropToLogin();
-        else setError(e.message);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+      const t = todayISO(s?.timezone ?? "Asia/Kolkata");
+      const upcoming = upcomingDeliveryDates(s?.delivery_days, t);
+      setDate((d) => d ?? upcoming[0] ?? t);
+    } catch (e) {
+      if (e instanceof SessionExpired) dropToLogin();
+      else setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   }, [session, dropToLogin]);
+
+  useEffect(() => {
+    loadReference();
+  }, [loadReference]);
 
   /* ------------------------------------------------ orders for the date */
 
@@ -163,6 +171,47 @@ export default function AdminDashboard() {
   useEffect(() => {
     loadOrders();
   }, [loadOrders]);
+
+  /* ------------------------------------------------ the run, for Production */
+
+  // A separate read: the dashboard shows one chosen date, the production table
+  // shows the next six delivery days, so they need different windows.
+  const [weekOrders, setWeekOrders] = useState([]);
+
+  const weekFrom = todayISO(settings?.timezone ?? "Asia/Kolkata");
+  const weekDates = useMemo(
+    () => nextDeliveryDates(settings?.delivery_days, weekFrom, 6),
+    [settings?.delivery_days, weekFrom]
+  );
+
+  const loadWeek = useCallback(async () => {
+    if (!session || !settings || weekDates.length === 0) return;
+    // Bounded by the dates actually being shown rather than a fixed number of
+    // calendar days, so the query and the table can never disagree about how
+    // far ahead they reach.
+    const from = weekDates[0];
+    const to = weekDates[weekDates.length - 1];
+    try {
+      const rows = await db(
+        `orders?select=${ORDER_SELECT}&delivery_date=gte.${from}&delivery_date=lte.${to}` +
+          `&order=delivery_date.asc,created_at.asc`
+      );
+      setWeekOrders(rows ?? []);
+    } catch (e) {
+      if (e instanceof SessionExpired) dropToLogin();
+      else setError(e.message);
+    }
+  }, [session, settings, weekDates, dropToLogin]);
+
+  useEffect(() => {
+    loadWeek();
+  }, [loadWeek]);
+
+  // A status change can affect either list, so both are refreshed together
+  // rather than leaving one showing a stale badge.
+  const reloadAll = useCallback(async () => {
+    await Promise.all([loadOrders(), loadWeek()]);
+  }, [loadOrders, loadWeek]);
 
   /* ------------------------------------------------ forecast */
 
@@ -214,6 +263,14 @@ export default function AdminDashboard() {
         <button
           type="button"
           className="ad-tab"
+          aria-pressed={view === "production"}
+          onClick={() => setView("production")}
+        >
+          Production
+        </button>
+        <button
+          type="button"
+          className="ad-tab"
           aria-pressed={view === "settings"}
           onClick={() => setView("settings")}
         >
@@ -231,6 +288,21 @@ export default function AdminDashboard() {
             // the delivery-date row re-derive from it immediately, rather than
             // waiting for a reload to catch up with what was just saved.
             onSaved={setSettings}
+          />
+          {/* Communities live with the other configuration rather than in a
+              fourth tab — four tabs do not fit a 360px handset comfortably. */}
+          <Areas onExpired={dropToLogin} onAreasChanged={loadReference} />
+        </div>
+      ) : view === "production" ? (
+        <div className="ad-wrap">
+          {error && <div className="ad-err">{error}</div>}
+          <Production
+            orders={weekOrders}
+            settings={settings}
+            dates={weekDates}
+            today={today}
+            onChanged={reloadAll}
+            onExpired={dropToLogin}
           />
         </div>
       ) : (
@@ -366,6 +438,7 @@ export default function AdminDashboard() {
                   prev.map((o) => (o.id === id ? { ...o, status: "dispatched" } : o))
                 )
               }
+              onStatusChanged={reloadAll}
               onExpired={dropToLogin}
             />
           ))}
@@ -829,12 +902,38 @@ function ManualEntry({
 
 /* ================================================== order card */
 
-function OrderCard({ order, settings, onDispatched, onExpired }) {
+function OrderCard({ order, settings, onDispatched, onStatusChanged, onExpired }) {
   const customer = order.customer ?? {};
   const waNumber = customer.phone ? `91${customer.phone}` : null;
   const firstName = (customer.name ?? "").trim().split(" ")[0] || "there";
 
   const [dispatchError, setDispatchError] = useState(null);
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+
+  // Every transition is a deliberate tap. Nothing advances on a timer or at
+  // the cutoff — §20/§21 keep a human in the loop for each one.
+  function setStatus(to) {
+    setStatusBusy(true);
+    setDispatchError(null);
+    db(`orders?id=eq.${order.id}`, {
+      method: "PATCH",
+      body: { status: to },
+      prefer: "return=minimal",
+    })
+      .then(() => onStatusChanged?.())
+      .catch((e) => {
+        if (e instanceof SessionExpired) onExpired();
+        else setDispatchError(e.message);
+      })
+      .finally(() => {
+        setStatusBusy(false);
+        setConfirmCancel(false);
+      });
+  }
+
+  const forward = nextStatus(order.status);
+  const back = prevStatus(order.status);
 
   const link = (text) =>
     `https://wa.me/${waNumber}?text=${encodeURIComponent(text)}`;
@@ -907,9 +1006,9 @@ function OrderCard({ order, settings, onDispatched, onExpired }) {
           <span className={`ad-src src-${order.source}`}>
             {SOURCE_LABEL[order.source] ?? order.source}
           </span>
-          {order.status === "dispatched" && (
-            <span className="ad-status st-dispatched">Dispatched</span>
-          )}
+          <span className={`ad-status st-${order.status}`}>
+            {STATUS_LABEL[order.status] ?? order.status}
+          </span>
         </div>
       </div>
 
@@ -936,24 +1035,95 @@ function OrderCard({ order, settings, onDispatched, onExpired }) {
       {dispatchError && <div className="ad-err">{dispatchError}</div>}
 
       {order.status === "cancelled" ? (
-        <div className="ad-order-cancelled">Cancelled — not counted in the forecast</div>
-      ) : (
-        waNumber && (
+        <>
+          <div className="ad-order-cancelled">Cancelled — not counted in the forecast</div>
+          {/* An undo for a mis-tap. Cancel is confirmed before it happens, but
+              a destructive action with no way back is its own kind of trap. */}
           <div className="ad-order-actions">
-            <a className="ad-wa" href={link(confirmText)} target="_blank" rel="noopener noreferrer">
-              Confirm
-            </a>
-            <a
-              className="ad-wa"
-              href={link(dispatchText)}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={onDispatchClick}
+            <button
+              type="button"
+              className="ad-step"
+              disabled={statusBusy}
+              onClick={() => setStatus("confirmed")}
             >
-              Dispatch
-            </a>
+              Restore to confirmed
+            </button>
           </div>
-        )
+        </>
+      ) : (
+        <>
+          {/* Status first: it is the thing that changes every day. The
+              WhatsApp templates sit below, unchanged. */}
+          <div className="ad-order-steps">
+            <button
+              type="button"
+              className="ad-step"
+              disabled={!back || statusBusy}
+              onClick={() => back && setStatus(back)}
+            >
+              ← {back ? STATUS_LABEL[back] : "Back"}
+            </button>
+            <button
+              type="button"
+              className="ad-step is-primary"
+              disabled={!forward || statusBusy}
+              onClick={() => forward && setStatus(forward)}
+            >
+              {forward ? STATUS_LABEL[forward] : "Delivered"} →
+            </button>
+          </div>
+
+          {confirmCancel ? (
+            <div className="ad-confirm" role="alert">
+              <span>
+                Cancel {order.reference}? It leaves the production maths
+                entirely.
+              </span>
+              <div className="ad-confirm-actions">
+                <button
+                  type="button"
+                  className="ad-step is-danger"
+                  disabled={statusBusy}
+                  onClick={() => setStatus("cancelled")}
+                >
+                  {statusBusy ? "Cancelling…" : "Yes, cancel"}
+                </button>
+                <button
+                  type="button"
+                  className="ad-step"
+                  onClick={() => setConfirmCancel(false)}
+                >
+                  Keep it
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="ad-cancel-link"
+              onClick={() => setConfirmCancel(true)}
+            >
+              Cancel this order
+            </button>
+          )}
+
+          {waNumber && (
+            <div className="ad-order-actions">
+              <a className="ad-wa" href={link(confirmText)} target="_blank" rel="noopener noreferrer">
+                Confirm
+              </a>
+              <a
+                className="ad-wa"
+                href={link(dispatchText)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={onDispatchClick}
+              >
+                Dispatch
+              </a>
+            </div>
+          )}
+        </>
       )}
     </article>
   );
