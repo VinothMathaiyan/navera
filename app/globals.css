@@ -343,7 +343,19 @@ button, input, select { font: inherit; color: inherit; }
 .date[aria-pressed="true"] .dow,
 .date[aria-pressed="true"] .mon { color: var(--on-green); }
 
-.window { margin-top: 4px; font-size: 13.5px; color: var(--muted); }
+/* Secondary, deliberately quiet — explains the rhythm without becoming a
+   banner. It carries an inline WhatsApp link, so it needs a link colour that
+   is not the browser default blue. */
+.window {
+  margin-top: 6px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.window a {
+  color: var(--green-soft);
+  text-decoration: underline;
+}
 
 /* ---------------- fields ---------------- */
 

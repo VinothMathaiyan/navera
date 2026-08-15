@@ -14,6 +14,17 @@ const parseDate = (s) => {
 };
 const rupees = (n) => "₹" + Number(n).toLocaleString("en-IN");
 
+const shiftDays = (d, n) => {
+  const out = new Date(d);
+  out.setDate(out.getDate() + n);
+  return out;
+};
+const sameDay = (a, b) =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+// "Sunday, 16 Aug"
+const longDate = (d) => `${DOW_LONG[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]}`;
+
 // get_ordering_info formats the cutoff with to_char(...'HH12:MI AM'), which
 // pads to "06:00 PM". Nobody writes the hour that way. Trimmed here rather than
 // in the database, so no settings or function signature has to change.
@@ -21,8 +32,7 @@ const clock = (t) => (t ?? "").replace(/^0/, "");
 
 /* One way of writing an order out in words — "1 × 500g, 2 × 200g", biggest pack
    first, the way you'd say it aloud. Used by the summary, the confirmation card
-   and the WhatsApp messages so all three always agree. `sep` is the only thing
-   that varies: WhatsApp gets the tighter "1×500g". */
+   and the WhatsApp message so all three always agree, spaced × throughout. */
 function packBreakdown(items, products, sep = " × ") {
   return items
     .map((it) => {
@@ -42,9 +52,6 @@ export default function OrderFlow({ info, loadError }) {
   const [phone, setPhone] = useState("");
   const [areaId, setAreaId] = useState("");
   const [flat, setFlat] = useState("");
-  // "" = untouched, "none" = explicitly chose No preference. Both store null;
-  // they are kept apart only so nothing looks pre-selected on first load.
-  const [timePref, setTimePref] = useState("");
   const [addressNote, setAddressNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -91,8 +98,8 @@ export default function OrderFlow({ info, loadError }) {
   const total = subtotal + Number(info?.delivery_charge ?? 0);
 
   // Name, phone, community and flat all stay required — a delivery cannot be
-  // made without them. Only the time preference and the address note are
-  // optional, and both are marked as such.
+  // made without them. The address note is the only optional field, and is
+  // marked as such.
   const missing = [
     items.length === 0 && "a pack",
     !date && "a delivery day",
@@ -118,17 +125,17 @@ export default function OrderFlow({ info, loadError }) {
         p_delivery_date: date,
         p_items: items,
         p_source: "website",
-        p_time_preference: timePref === "morning" || timePref === "evening" ? timePref : null,
+        // p_time_preference is deliberately not sent. The control was removed
+        // from the page; the parameter and the column both still exist,
+        // nullable and defaulting to null, so nothing here depends on it.
         p_address_note: addressNote.trim() || null,
       });
       // Snapshot what was ordered alongside the server's answer. place_order
-      // returns the reference, date and total but not the packs, and this is
-      // the one order the confirmation screen is ever allowed to speak about.
-      setDone({
-        ...res,
-        packs: packBreakdown(items, info.products, " × "),
-        packsCompact: packBreakdown(items, info.products, "×"),
-      });
+      // returns the reference, date, total, community and flat but not the
+      // packs, and this is the one order the confirmation screen is ever
+      // allowed to speak about. community/flat come from the response rather
+      // than form state so a re-render can't desync them.
+      setDone({ ...res, packs: packBreakdown(items, info.products, " × ") });
       window.scrollTo({ top: 0 });
     } catch (e) {
       setError(e.message);
@@ -163,14 +170,16 @@ export default function OrderFlow({ info, loadError }) {
   if (done) {
     const d = parseDate(done.delivery_date);
     const dayName = DOW_LONG[d.getDay()];
-    const dateStr = `${dayName}, ${d.getDate()} ${MON[d.getMonth()]}`;
+    const dateStr = longDate(d);
+    // Every delivery is prepared the evening before — derived, never a lookup
+    // table, so it stays right if the delivery days ever change again.
+    const prepDayName = DOW_LONG[shiftDays(d, -1).getDay()];
 
-    // Exactly one order — this one. Never a running list of everything the
-    // customer has ever ordered. The packs, day and amount travel with it so
-    // the message reads whole on its own.
+    // Exactly one order — this one, never a running list. No price: it goes
+    // stale and a support chat doesn't need it. And no access_token: that is a
+    // private credential and WhatsApp messages get forwarded.
     const enquiry =
-      `Hi Navera, about my order ${done.reference}` +
-      `${done.packsCompact ? ` — ${done.packsCompact}` : ""}, ${dateStr}, ${rupees(done.total)}.`;
+      `Hi Navera, I've placed order ${done.reference} for ${done.packs} paneer on ${dateStr}.`;
 
     return (
       <main>
@@ -181,19 +190,27 @@ export default function OrderFlow({ info, loadError }) {
           </div>
           <h2 className="done-h">Thank you, {done.name.split(" ")[0]}</h2>
           <p className="msg">
-            Your paneer will be prepared fresh on {dayName}. We&apos;ll reach out
-            on WhatsApp with more details.
+            Your paneer will be prepared on {prepDayName} evening and delivered
+            on {dayName}. We&apos;ll confirm the delivery details with you on
+            WhatsApp.
           </p>
 
           <div className="card">
             <div className="k">Delivery</div>
-            <div className="v">
-              {dayName}, {d.getDate()} {MON[d.getMonth()]}
-            </div>
+            <div className="v">{dateStr}</div>
             {done.packs && (
               <>
-                <div className="k">Packs</div>
+                <div className="k">Pack</div>
                 <div className="v">{done.packs}</div>
+              </>
+            )}
+            {/* Straight from the place_order response, not from form state. */}
+            {(done.community || done.flat) && (
+              <>
+                <div className="k">Deliver to</div>
+                <div className="v">
+                  {[done.community, done.flat].filter(Boolean).join(", ")}
+                </div>
               </>
             )}
             <div className="k">To pay on delivery</div>
@@ -218,7 +235,31 @@ export default function OrderFlow({ info, loadError }) {
   /* ------------------------------------------------ the order page */
 
   const first = parseDate(info.delivery_dates[0]);
-  const firstDay = DOW_LONG[first.getDay()];
+
+  // Only three days are offered. get_ordering_info already returns the right
+  // set for any given moment, so this is a slice and never a recalculation.
+  const offered = info.delivery_dates.slice(0, 3);
+
+  /* ---- cutoff line, derived entirely from get_ordering_info ----
+
+     Every batch is prepared the evening before, so the cutoff that matters is
+     6 PM on the day before delivery_dates[0] — which is only "today" when
+     tomorrow happens to be a delivery day. On Sat/Sun that is true; from
+     Monday to Thursday the next delivery is Saturday and the deadline is
+     Friday, so saying "today" there would be plainly false. Three branches,
+     all true, no hardcoded day names.
+
+     Which weekdays we deliver on is not in the payload, so it is recovered
+     from the dates themselves — six dates over a fortnight cover every
+     delivery weekday. */
+  const today = new Date(info.server_time);
+  const deliveryWeekdays = new Set(info.delivery_dates.map((iso) => parseDate(iso).getDay()));
+  const cutoffDay = shiftDays(first, -1);
+  const cutoffIsToday = sameDay(cutoffDay, today);
+  // After the cutoff, the day that just closed is tomorrow — but only if we
+  // actually deliver then. On a Tuesday evening nothing has closed.
+  const tomorrow = shiftDays(today, 1);
+  const justClosed = info.past_cutoff && deliveryWeekdays.has(tomorrow.getDay()) ? tomorrow : null;
 
   return (
     <main>
@@ -226,13 +267,19 @@ export default function OrderFlow({ info, loadError }) {
 
       {/* No delivery time is promised here, only the day. The time is agreed on
           WhatsApp — see the delivery-time rule in CLAUDE.md. */}
-      {info.past_cutoff ? (
+      {justClosed ? (
         <div className="cutoff closed">
-          Today&apos;s orders have closed. The next delivery day is {firstDay}, {first.getDate()} {MON[first.getMonth()]}.
+          {DOW_LONG[justClosed.getDay()]} is closed — the next available day is{" "}
+          {longDate(first)}.
+        </div>
+      ) : !cutoffIsToday ? (
+        <div className="cutoff">
+          Order by {clock(info.cutoff_time)} {DOW_LONG[cutoffDay.getDay()]} for{" "}
+          {longDate(first)}.
         </div>
       ) : (
         <div className="cutoff">
-          Order before {clock(info.cutoff_time)} for {firstDay}, {first.getDate()} {MON[first.getMonth()]}
+          Order by {clock(info.cutoff_time)} today for {longDate(first)}.
           {minsLeft !== null && minsLeft <= 60 && minsLeft > 0 && (
             <span className="soon">
               Orders close in {minsLeft} minute{minsLeft === 1 ? "" : "s"}
@@ -304,12 +351,12 @@ export default function OrderFlow({ info, loadError }) {
         <section className="step">
           <div className="step-head">
             <span className="step-num">2</span>
-            <h2>Which day would you prefer to deliver?</h2>
+            <h2>When would you like it?</h2>
           </div>
-          {/* Bleeds past the wrap so the next card is visibly cut off by the
-              screen edge — that overhang is the cue that the row scrolls. */}
+          {/* Three options only. get_ordering_info already returns the correct
+              set for any moment, so this is a slice, not a recalculation. */}
           <div className="dates" role="group" aria-label="Delivery day">
-            {info.delivery_dates.map((iso) => {
+            {offered.map((iso) => {
               const d = parseDate(iso);
               return (
                 <button
@@ -329,7 +376,20 @@ export default function OrderFlow({ info, loadError }) {
               );
             })}
           </div>
-          <p className="window">Prepared and delivered fresh on the day you choose.</p>
+          <p className="window">
+            Your paneer is made the evening before it reaches you. We do this
+            three days a week for now, so nothing is rushed. Need another day?{" "}
+            <a
+              href={waLink(
+                "Hi Navera, could I get paneer on a day that isn't listed?"
+              )}
+              {...newTab}
+            >
+              Message us
+              <NewTabNote />
+            </a>
+            {/* Hugs the link — a newline here renders as "Message us ." */}.
+          </p>
         </section>
 
         {/* 3 — details */}
@@ -408,30 +468,11 @@ export default function OrderFlow({ info, loadError }) {
             />
           </div>
 
-          {/* A preference, not a bookable slot — deliberately no clock times. */}
-          <div className="field">
-            <span className="lbl" id="tp-lbl">
-              Preferred delivery time (optional)
-            </span>
-            <div className="bands" role="group" aria-labelledby="tp-lbl">
-              {[
-                ["morning", "Morning"],
-                ["evening", "Evening"],
-                ["none", "No preference"],
-              ].map(([value, label]) => (
-                <button
-                  key={label}
-                  type="button"
-                  className="band"
-                  aria-pressed={timePref === value}
-                  onClick={() => setTimePref(value)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <p className="hint">We&apos;ll try to match it and confirm on WhatsApp.</p>
-          </div>
+          {/* The Morning / Evening / No preference control was removed on
+              2026-08-15 (approved reversal of an earlier locked decision).
+              orders.time_preference and place_order's p_time_preference both
+              remain, nullable and defaulting to null — the page simply stops
+              sending a value. The admin's manual-entry screen still offers it. */}
 
           <div className="field">
             <label htmlFor="an">Anything to help us find you? (optional)</label>
@@ -490,9 +531,15 @@ export default function OrderFlow({ info, loadError }) {
           </div>
         )}
 
-        {/* signature — why tomorrow */}
+        {/* signature — why we make it the night before.
+            The heading used to read "Why tomorrow, and not today", which was
+            true when every delivery was next-day. Under Sat/Sun/Mon the wait
+            can be five days, but the preparation-to-delivery gap is always one
+            night, so the new heading holds either way. The steps below were
+            audited at the same time and none of them name a day or imply
+            same-day preparation, so they are unchanged. */}
         <section className="thread">
-          <h3>Why tomorrow, and not today</h3>
+          <h3>Why we make it the night before</h3>
           <p className="why">
             Your paneer never exists until you order it. Nothing sits in cold
             storage or on a shelf waiting for a buyer.
