@@ -60,8 +60,8 @@ min order, delivery charge — all admin-editable from `/admin` → Settings sin
 
 **RLS is deny-by-default.** Public (anon) role has zero direct read access to
 customers, orders, order_items, subscriptions. It can only read `settings`,
-active `delivery_areas`, active `products`. All public writes go through two
-`SECURITY DEFINER` functions:
+active `delivery_areas`, active `products`. All public reads of private data
+and all public writes go through three `SECURITY DEFINER` functions:
 
 - `get_ordering_info()` — returns everything the order page needs: cutoff,
   delivery dates already computed server-side, areas, products, prices.
@@ -79,6 +79,35 @@ active `delivery_areas`, active `products`. All public writes go through two
     otherwise the old overload lingers and a call becomes ambiguous. Grants
     are lost on drop, so re-`grant execute` to `anon`, `authenticated` and
     `service_role` afterwards (`PUBLIC` stays revoked).
+  - **`PUBLIC` really is revoked now, on all three functions** — the founder
+    revoked it on `place_order` directly on 2026-08-16. Until then this note
+    described the intent and `place_order` alone still carried the default
+    `PUBLIC` grant it was created with. Not a hole (`anon` has the same
+    capability and the function is meant to be public), but the drift is worth
+    knowing about because a **newly created function is granted to `PUBLIC` by
+    default** — the `revoke` is a required step, not a tidy-up. Check with
+    `has_function_privilege('public', oid, 'EXECUTE')`, which should be
+    `false` for all three while `anon` stays `true`.
+- `get_my_orders(p_token)` — added 2026-08-16, the read behind `/my/<token>`
+  (spec §15). Takes the customer's `access_token` and returns only that
+  customer's own name, community, flat and last 20 orders with their items.
+  **It never returns the phone, the token, customer notes, or any id.**
+  - **Every failure returns SQL `null`, and that uniformity is the feature.**
+    Unknown token, truncated token, one character altered, a rotated token, a
+    blocked customer, and a real customer with no orders are all
+    indistinguishable — there is deliberately no "not found" error and no
+    empty-but-present payload, because either would confirm that a guessed
+    token exists. The page above it says one identical thing for all of them
+    too; verified by fingerprinting the rendered HTML for six bad-token
+    variants, all byte-identical (1388 bytes, same digest) against a different
+    valid response. **Do not add a distinguishing error message here.**
+  - Revocation needs no schema change: rotating the column
+    (`update customers set access_token = encode(gen_random_bytes(24),'hex')`)
+    makes the old link return null like any other unknown token. `is_blocked`
+    also suppresses the whole payload.
+  - There is a cheap `length(p_token) between 24 and 128` guard before the
+    lookup. It exists to stop a megabyte of text reaching the query, not as
+    validation — it returns the same null as everything else.
 
 **Keep this pattern for every future public-facing feature** (Order Again,
 Change Tomorrow's Order, subscriptions, skip/pause): a narrow
@@ -166,10 +195,31 @@ plus a valid mixed-pack order — all passed before this was trusted.
   add and then remove Wednesday on the live customer page with no redeploy.
   Admin CSS checked at 360 and 768 px — no overflow, seven weekday cells on one
   row, 11 text/background pairs all at WCAG AA.
+- **2026-08-16 — first hand-testing round.** Five fixes from the founder's own
+  pass over the built site. See the "Private link" and "Order card" sections
+  below for the rules each one established.
+  - **The confirmation is now a real route, `/my/<token>`** (spec §15), not
+    React state. This was a genuine bug: refreshing the confirmation dropped
+    the delivery address and returned to step 1, which made the page's own
+    "keep this page" line untrue.
+  - **The customer's details are remembered on their own device** and offered
+    back for review, with a "Not you?" link that clears them.
+  - **The order summary doubles as a review step**, with a Change control per
+    step that moves focus back to it.
+  - **The admin order card was split into two axes** — status, and messages.
+  - Verified end to end against the live database: an order placed through the
+    browser (NAV-009) landed on its private page, survived a hard refresh and a
+    cold load with every cookie and storage key cleared; six bad-token variants
+    rendered byte-identical pages; `anon` still gets `42501` on orders,
+    order_items, customers and subscriptions over real HTTP. Contrast and tap
+    targets re-checked at 360 px on every new control.
 - `.claude/launch.json` already carries a `navera-dev` config, so
   `preview_start` can run the dev server by that name. Note that `npm run
   build` and `next dev` share `.next/`: running a build while the dev server
   is up makes it serve 404s for its own chunks until it is restarted.
+- **A folder under `app/` whose name starts with `_` is private to Next and
+  gets no route** — `app/admin/__cardtest/` 404s, `app/admin/cardtest/` does
+  not. Worth knowing before debugging a "missing" page for ten minutes.
 - **Not yet deployed.** A Vercel deploy attempt hit `403: You don't have
   permission to create a project` — the connected Vercel account could read
   the existing `wellness-connect` project but not create a new one. Likely a
@@ -227,17 +277,62 @@ tables directly — the `admin manages X` policies (`ALL` / `to authenticated`
 - Admin dates are handled as plain `YYYY-MM-DD` strings and "today" is
   resolved through `settings.timezone`, so the forecast can't slide a day if
   the browser is in another zone.
-- **Confirm and Dispatch must stay real `<a href>` elements.** Dispatch fires
-  its status write from `onClick` and lets the anchor navigate on its own. The
-  obvious alternative — `await` the PATCH, then `window.open()` — is broken:
-  the await spends the click's user-gesture window and the browser silently
-  blocks the popup, so the WhatsApp thread never opens. That was measured in
-  this project, not guessed. If either link ever needs to do more work, keep
-  the navigation on the anchor and put the work in `onClick`.
+- **Every WhatsApp control stays a real `<a href>`.** They open `wa.me` in a
+  new tab and WhatsApp's own Send still has to be pressed, so nothing goes out
+  without a human reading it. If one ever needs to do work as well, keep the
+  navigation on the anchor and put the work in `onClick` — never `await`
+  something and then `window.open()`. The await spends the click's
+  user-gesture window and the browser silently blocks the popup, so the thread
+  never opens. That was measured in this project, not guessed.
+  - **Superseded 2026-08-16: no message control writes anything any more.** The
+    note above used to say Dispatch fired a status write from `onClick`. It
+    does not. See the order card section below.
 - The first table read straight after sign-in can come back `401` while the
   new token propagates. `lib/admin.js` refreshes and retries once, which
   absorbs it; expect to see that 401 in the network log even on a healthy
   login. It is not a bug to chase.
+
+#### The order card — two axes, and they must stay apart
+
+Rebuilt 2026-08-16 after the founder found it confusing in hand testing. The
+old card had five controls — Back / Preparing changed status, Confirm sent a
+message, and **Dispatch quietly did both**. One control doing two unrelated
+jobs is what made it unpredictable.
+
+- **STATUS is the only thing on the card that writes `orders.status`.** One
+  row, advance and back, along `confirmed → preparing → dispatched →
+  delivered`. Cancel is separate and keeps its own confirmation and undo.
+- **MESSAGE writes nothing, ever.** One WhatsApp button opening a menu of four
+  templates — Confirm, Dispatch, Reminder (§21), Feedback (§27). All four are
+  plain anchors to `wa.me`. **Dispatch no longer sets `status='dispatched'`.**
+- The two touch in exactly one place and in one direction: `MESSAGE_FOR_STATUS`
+  maps a status to the message that suits it, so **advancing the status offers
+  the matching message and never sends it** — §20 and §21 both put a human in
+  that loop deliberately: Gowri taps, reviews, sends. Sending never moves a
+  status.
+- The offer is captioned from the status just written, not from `order.status`.
+  The prop only catches up when `onStatusChanged`'s reload returns, so reading
+  it there captions the offer with the status just left.
+- Verified by intercepting `fetch` in the browser: all four message templates
+  opened WhatsApp and issued **zero** requests; walking the status chain up and
+  back down issued **exactly one** `PATCH` per tap with the right body, and
+  stopped at both ends.
+- **Nothing in the app writes `orders.time_preference` any more.** The badge on
+  the card went first (dead UI — the customer page had already stopped sending
+  a preference), and the admin's Morning/Evening control in manual entry
+  followed on the same day, because with no badge it was a field that silently
+  discarded whatever Gowri typed. A field that throws away what you tell it is
+  worse than no field.
+  - **The column and `place_order`'s `p_time_preference` both stay**, nullable
+    and defaulting to null, and the Confirm template still echoes a preference
+    when a row happens to carry one — two legacy test rows do. Nothing new can
+    set one. Reinstating the control means reinstating the badge in the same
+    change, or the same trap comes back.
+- `orders.created_at` is shown as "placed Sun 16 Aug, for Mon 17 Aug",
+  converted to `settings.timezone` first — it is a `timestamptz`, and an order
+  placed at 11:40 PM in Chennai is an earlier day in UTC. **Deliberately not
+  added to the Production table**: that table aggregates by delivery date, and
+  several orders on one row can have been placed on different days.
 
 #### Settings screen (`app/admin/Settings.js`)
 
@@ -276,6 +371,22 @@ tables directly — the `admin manages X` policies (`ALL` / `to authenticated`
   PostgREST hands back numerics as **strings**, which is what the tests pin.
 - Cancelled orders are excluded from every figure, as before.
 
+#### Production tab (`app/admin/Production.js`)
+
+- **The "Start" batch action lives in each table row**, as a small button in a
+  final unlabelled column, and only on rows where `toMake > 0`. Rows with
+  nothing left to make show a dash — a Start button that would do nothing is
+  worse than no button.
+  - It replaced six stacked full-width blocks below the table (2026-08-16).
+    Those had to spell out their own date so you could match each one back to a
+    row; in the row, the date *is* the row. The visible label is just "Start",
+    so the accessible name carries the date and the count.
+  - The row action still marks the **whole evening's batch**, not one order —
+    that was never the problem with the old buttons, only where they sat.
+  - `.ad-table` had its `min-width` raised 420 → 480 px for the extra column.
+    The table scrolls inside `.ad-tablewrap`, so this widens that scroll and
+    never the page.
+
 ### Customer page — decisions that are load-bearing, not taste
 
 - **One selected look for every choice.** Packs, delivery days and time bands
@@ -300,11 +411,64 @@ tables directly — the `admin manages X` policies (`ALL` / `to authenticated`
   suppressed on the last), running dot-bottom to next-dot-top, rather than one
   line down the whole column — that older version overshot the first and last
   dots and drifted whenever a step's text wrapped.
+- **The confirmation is `/my/<token>`, and it must stay a URL.** It is a server
+  component with no client state at all, which is the only thing that makes
+  "refresh it, bookmark it, come back next week" structurally true rather than
+  a promise the client has to keep. Do not move it back into React state, and
+  do not make it depend on localStorage.
+  - The route sets `robots: noindex` and `referrer: no-referrer` in its
+    metadata, and every outbound link carries `rel="noopener noreferrer"`.
+    **Both are load-bearing, not boilerplate.** The token is a credential
+    sitting in the URL: indexing it would publish it, and a Referer header
+    would hand it to WhatsApp on the first tap of "Message us".
+  - `?placed=NAV-00X` names which order the visit is about, so a refresh keeps
+    showing that confirmation rather than a generic list. The token already
+    grants everything the reference could reveal, so it adds no exposure.
+  - **The token never goes into a WhatsApp message.** Same rule as before —
+    those get forwarded. The page says "don't forward the link" for the same
+    reason.
+  - "Keep this page — you can reorder from it next time" stays, and the
+    "Order again" button is what makes it true: it lands on the order form,
+    which the device-local details then fill in. §14's one-tap same-again
+    replaces that button; until it does, the sentence must not outrun what the
+    page actually does.
+- **The customer's details are remembered in `localStorage` under
+  `navera.you.v1`, and that is the only place they may ever come from.**
+  Name, phone, community and flat, written after a successful order.
+  **Never add a server-side lookup by phone number to the customer page.**
+  Typing ten digits must never return someone's stored address — that would
+  hand a neighbour's name and flat to anyone willing to guess, which is the
+  exact exposure the whole anon-deny-by-default posture exists to prevent.
+  The admin's phone-first lookup is a different thing and stays: it is behind
+  Supabase Auth.
+  - Read in an effect after mount, never during render — localStorage does not
+    exist on the server and seeding state from it desyncs the HTML.
+  - Every access is wrapped in try/catch: Safari private mode throws rather
+    than returning null, and not being able to remember must never break the
+    order form.
+  - The community is only restored if it is **still in `info.areas`**, or a
+    retired area sits in the select as a stale id that fails at the very last
+    step with nothing on screen explaining why.
+  - **"Not you?" is required, not a nicety.** Families share a phone and a
+    laptop. It clears the four fields and the stored record.
+- **The summary is also the review step.** Packs, delivery day and address each
+  carry a Change control that scrolls to its step and focuses it (the sections
+  are `tabIndex={-1}` for exactly this). That is what "move back a step before
+  confirming" means here — the page stayed one screen rather than becoming a
+  wizard, because every step is editable in place and always was.
 - **Packs are written "1 × 500g, 2 × 200g", biggest first, everywhere**:
   the live order summary, the confirmation card, the customer's WhatsApp
-  message and both admin templates. `packBreakdown()` in `app/OrderFlow.js`
-  is the one implementation; the admin has its own two-line equivalent because
-  it reads from `order_items` rather than from form state.
+  message and every admin template. `packLine()` in **`app/format.js`** is the
+  one implementation — moved there from `OrderFlow.js` on 2026-08-16 when the
+  confirmation became its own route and two pages needed it. It takes rows that
+  already carry `weight_grams`, which is what `order_items` and `get_my_orders`
+  both return; the order form resolves product ids to weights first. The admin
+  still has its own equivalent because it reads from `order_items`.
+  - `app/format.js` and `app/Masthead.js` were both extracted in the same
+    change, so the order page and the private page cannot drift on how they
+    write a date, a price or a pack. `Masthead` takes `lede` — the order page
+    passes it (that lede is the page's `<h1>`), the private page does not,
+    because its own heading is the `<h1>` there.
 - **A customer-side "message us" link carries exactly one order** — the one
   on screen. Worth knowing before hunting for a bug here: the founder saw a
   WhatsApp draft reading "…NAV-001 … NAV-002" and reported it as
@@ -432,12 +596,25 @@ no service-role key is stored in this repo and none should be. There is no
 signup route and no password reset UI on the site; both are done from the
 dashboard.
 
-## Next steps (Day 4 onward — see docs/NAVERA_WEBSITE_MASTER_SPEC.md §41)
+## Next steps (see docs/NAVERA_WEBSITE_MASTER_SPEC.md §41)
 
-Next: Order Again (highest-value single feature — lands on the private
-`access_token` link, action-first not a history page), My Navera, Change
-Tomorrow's Order (same cutoff as ordering), then Weekly Delivery with
+Next: **Order Again** (highest-value single feature). The groundwork is now in
+place — `/my/<token>` exists, `get_my_orders` already returns each order's
+items, and the page already has an "Order again" button that only navigates to
+a blank form. §14 replaces that button with the real thing: the last order's
+packs, one tap, action-first rather than a history page. Follow it with Change
+Tomorrow's Order (§16, same cutoff as ordering), then Weekly Delivery with
 skip/pause. Full sequence in the spec §41.
+
+Open, not decided:
+
+- **Customer login / OTP** — under active founder consideration, deliberately
+  not built. The private link is the whole auth story today.
+- **The inline "Message us" link in the date step's paragraph is 16 px tall**,
+  under the 44 px tap target every other control on the site holds to. It is
+  inline in a sentence, so the fix is the `.notlisted` / `.notyou` treatment
+  (`display: inline-flex; min-height: 44px`). Pre-existing, left alone as out
+  of scope.
 
 ## Deploy
 

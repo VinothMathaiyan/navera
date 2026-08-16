@@ -168,6 +168,38 @@ button, input, select { font: inherit; color: inherit; }
 
 .step { margin-top: 30px; }
 
+/* Each step is a focus target so a Change control in the summary can send you
+   back to it — see backTo() in OrderFlow.js. tabIndex={-1} keeps it out of the
+   tab order; the ring only ever shows when something deliberately jumped here,
+   which is exactly when you want to be told where you landed. */
+.step:focus { outline: none; }
+.step:focus-visible {
+  outline: 3px solid var(--mustard-dk);
+  outline-offset: 6px;
+  border-radius: var(--r-s);
+}
+
+/* Details we already had, offered back for review. Families share a phone, so
+   the way out sits next to the claim rather than in browser settings. */
+.remembered {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+/* Same shape as .notlisted: inline in the sentence, but a real 44px target. */
+.notyou {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 13px;
+  color: var(--green-soft);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .step-head {
   display: flex;
   align-items: baseline;
@@ -185,16 +217,20 @@ button, input, select { font: inherit; color: inherit; }
 
 /* ---------------- one selected look, everywhere ----------------
 
-   Packs, days and time bands are all "pick this one" controls, so they share a
-   single selected treatment: filled deep green, light text, and a tick. The
-   tick matters — colour alone must not be the only thing carrying the state.
+   Packs and days are both "pick this one" controls, so they share a single
+   selected treatment: filled deep green, light text, and a tick. The tick
+   matters — colour alone must not be the only thing carrying the state.
+
+   The `.band` pill shared this treatment until 2026-08-16. The last one was
+   the admin's Morning/Evening control, removed because the order card no
+   longer displays a preference, so the field discarded whatever was typed
+   into it. Its rules are deleted rather than left behind as dead CSS.
 */
 
-.pack, .date, .band { position: relative; }
+.pack, .date { position: relative; }
 
 .pack[aria-pressed="true"],
-.date[aria-pressed="true"],
-.band[aria-pressed="true"] {
+.date[aria-pressed="true"] {
   background: var(--green);
   border-color: var(--green-deep);
   color: #fff;
@@ -386,26 +422,6 @@ button, input, select { font: inherit; color: inherit; }
   margin-bottom: 5px;
 }
 
-/* Soft bands, not slots: no clock times here on purpose. */
-.bands { display: flex; gap: 8px; flex-wrap: wrap; }
-.band {
-  flex: 1 1 auto;
-  min-height: 44px;
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: 100px;
-  padding: 10px 14px;
-  font-size: 14.5px;
-  color: var(--ink);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: border-color .15s, background .15s, color .15s;
-}
-.band:hover { border-color: var(--green-soft); }
-.band[aria-pressed="true"] { font-weight: 600; }
-/* The tick again, inline — a pill is too small for a corner badge. */
-.band[aria-pressed="true"]::before { content: "✓ "; color: var(--mustard); }
-
 .hint { margin: 7px 0 0; font-size: 13px; color: var(--muted); }
 
 .notlisted {
@@ -438,6 +454,66 @@ button, input, select { font: inherit; color: inherit; }
   padding: 3px 0;
   color: var(--on-green);
 }
+/* The summary doubles as the review step: the three things being committed to,
+   each with its own way back. "Change" is mustard on the green fill (7.8:1) and
+   underlined, so it is never colour alone that marks it as a control. */
+.summary .sum-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--on-green);
+}
+.sum-change {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  background: none;
+  border: 0;
+  padding: 0 0 0 12px;
+  /* No visible box, but still a full 44px target — same rule the rest of the
+     site holds to, and the reason this is a flex box rather than a bare span. */
+  min-height: 44px;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--mustard);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.summary .sum-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  padding: 9px 0 2px;
+  margin-top: 7px;
+  border-top: 1px solid rgba(255,255,255,.13);
+}
+.summary .sum-row .k {
+  grid-column: 1;
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--on-green);
+}
+.summary .sum-row .v {
+  grid-column: 1;
+  grid-row: 2;
+  font-size: 15px;
+  color: var(--cream);
+}
+.summary .sum-row .sum-change {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
 .summary .total {
   display: flex;
   justify-content: space-between;
@@ -572,10 +648,15 @@ button, input, select { font: inherit; color: inherit; }
 }
 .foot .fssai { margin-top: 16px; font-size: 12px; color: var(--muted); }
 
-/* ---------------- confirmation ---------------- */
+/* ---------------- confirmation / the private page ----------------
 
-.done { padding-top: 34px; text-align: center; }
-.done .tick {
+   The confirmation used to be React state on the order page; it now lives at
+   /my/<token> so that a refresh, a bookmark or a visit next week all rebuild
+   it from the URL. These rules are shared by both because the customer sees
+   the same card either way and it must not change shape when it moved. */
+
+.done, .my { padding-top: 34px; text-align: center; }
+.done .tick, .my .tick {
   width: 58px; height: 58px;
   margin: 0 auto 17px;
   border-radius: 50%;
@@ -584,9 +665,9 @@ button, input, select { font: inherit; color: inherit; }
   font-size: 28px;
   line-height: 58px;
 }
-.done .done-h { font-size: 27px; color: var(--green); }
-.done .msg { margin-top: 14px; font-size: 15.5px; color: var(--ink); }
-.done .card {
+.done .done-h, .my .done-h { font-size: 27px; color: var(--green); }
+.done .msg, .my .msg { margin-top: 14px; font-size: 15.5px; color: var(--ink); }
+.done .card, .my .card {
   margin-top: 22px;
   background: var(--card);
   border: 1.5px solid var(--line);
@@ -594,15 +675,116 @@ button, input, select { font: inherit; color: inherit; }
   padding: 16px;
   text-align: left;
 }
-.done .card .k { font-size: 12.5px; color: var(--muted); }
-.done .card .v { font-size: 16px; margin-bottom: 11px; }
-.done .card .v:last-child { margin-bottom: 0; }
-.done .card .ordid {
+.done .card .k, .my .card .k { font-size: 12.5px; color: var(--muted); }
+.done .card .v, .my .card .v { font-size: 16px; margin-bottom: 11px; }
+.done .card .v:last-child, .my .card .v:last-child { margin-bottom: 0; }
+.done .card .ordid, .my .card .ordid {
   margin-top: 14px;
   padding-top: 11px;
   border-top: 1px solid var(--line);
   font-size: 12.5px;
   letter-spacing: .04em;
+  color: var(--muted);
+}
+
+/* ---------------- /my/<token> ---------------- */
+
+.my-h { font-size: 27px; color: var(--green); }
+.my-hello { margin: 10px 0 0; font-size: 15.5px; color: var(--muted); }
+.my-lost {
+  margin: 12px auto 0;
+  max-width: 34ch;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.my-sec { margin-top: 28px; text-align: left; }
+.my-sec h2 {
+  font-size: 13px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--mustard-dk);
+  font-family: var(--font-body);
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.my-order {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r);
+  padding: 13px 14px;
+  margin-bottom: 10px;
+}
+/* Delivered and gone: still legible, but it stops competing with what is
+   still coming. Softened with a real colour rather than opacity, which would
+   drop the text under AA. */
+.my-order.is-past { background: transparent; border-color: #EAE5D6; }
+
+.my-order-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.my-when { font-size: 15px; font-weight: 600; color: var(--green); }
+.my-badge {
+  flex: 0 0 auto;
+  background: var(--sage);
+  color: var(--green-deep);
+  border-radius: 100px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  white-space: nowrap;
+}
+.my-badge.st-delivered { background: var(--green); color: var(--cream); }
+.my-badge.st-cancelled { background: #F6E3DE; color: var(--danger); }
+
+.my-order-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14.5px;
+  color: var(--ink);
+}
+.my-ref {
+  margin-top: 6px;
+  font-size: 12px;
+  letter-spacing: .04em;
+  color: var(--muted);
+}
+
+.my-actions { margin-top: 26px; }
+/* The Order again control is a link, not a button — it navigates, so it has to
+   be one for middle-click, long-press and "open in new tab" to behave. */
+.cta.again {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+}
+.my-actions .wa { margin-top: 14px; }
+
+.my-keep {
+  margin: 26px 0 0;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.my-private {
+  margin: 8px auto 0;
+  max-width: 36ch;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+/* The licence line elsewhere is styled as `.foot .fssai`; this one is not in a
+   .foot, so it carries its own type rather than silently rendering at 16px. */
+.my-fssai {
+  margin: 22px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
   color: var(--muted);
 }
 

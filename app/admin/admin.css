@@ -497,21 +497,18 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Time preference and "how to find me" — both optional, so these only ever
-   render when the customer actually said something. Visually distinct from
-   .ad-order-note (the free-form order note) since they drive different
-   decisions: one shapes the delivery run order, the other the doorstep. */
-.ad-order-pref {
-  display: inline-block;
-  margin-top: 9px;
-  background: var(--sage);
-  color: var(--green-deep);
-  border-radius: 100px;
-  padding: 4px 11px;
+/* When it came in, against when it is for. Quiet — it is context for the
+   numbers below, not one of them. */
+.ad-order-when {
+  margin-top: 7px;
   font-size: 12.5px;
-  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
+/* "How to find me" — optional, so it only ever renders when the customer
+   actually said something. Visually distinct from .ad-order-note (the
+   free-form order note) since they drive different decisions. */
 .ad-order-find {
   margin-top: 9px;
   border-left: 2.5px solid var(--green-soft);
@@ -543,7 +540,10 @@
   border: 1.5px solid var(--green);
   color: var(--green);
   border-radius: var(--r-s);
-  padding: 10px;
+  /* 11px, not 10: at 10 this measured 43.8px tall, just under the 44px tap
+     target the rest of the site holds to. */
+  padding: 11px;
+  min-height: 44px;
   font-size: 14.5px;
   font-weight: 600;
   text-decoration: none;
@@ -566,7 +566,21 @@
 .ad-status.st-delivered  { background: var(--green); color: var(--cream); }
 .ad-status.st-cancelled  { background: #f6e3de; color: var(--danger); }
 
-/* ---------------- per-order status controls ---------------- */
+/* ---------------- per-order status controls ----------------
+
+   The card has two axes and they are labelled, because the previous version
+   put five controls in a row and left it to memory which of them wrote to the
+   database. "Status" writes. "Message" does not. */
+
+.ad-axis {
+  margin-top: 14px;
+  margin-bottom: 6px;
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--muted);
+}
 
 .ad-order-steps { display: flex; gap: 9px; margin-top: 12px; }
 .ad-step {
@@ -612,6 +626,60 @@
 }
 .ad-confirm-actions { display: flex; gap: 9px; margin-top: 10px; }
 
+/* ---------------- the WhatsApp menu ----------------
+
+   One button, four templates behind it. Every item is a real anchor to wa.me
+   opening in a new tab — nothing here PATCHes anything, which is the point of
+   the split. */
+
+.ad-wa-toggle {
+  display: block;
+  width: 100%;
+  flex: none;
+}
+.ad-wa-menu {
+  margin-top: 8px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-s);
+  overflow: hidden;
+  background: var(--card);
+}
+.ad-wa-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 48px;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 14.5px;
+}
+.ad-wa-item:last-child { border-bottom: 0; }
+.ad-wa-item:hover { background: var(--sage); }
+.ad-wa-item strong { color: var(--green); font-weight: 600; }
+.ad-wa-item span { font-size: 12.5px; color: var(--muted); }
+
+/* Offered after a status change, never acted on by itself. Sits between the
+   two axes because it is the one place they touch. */
+.ad-offer {
+  margin-top: 10px;
+  background: #fdf6e3;
+  border-radius: var(--r-s);
+  padding: 11px 13px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--cocoa);
+}
+.ad-offer-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 9px;
+}
+.ad-offer-actions .ad-wa { flex: 1 1 auto; }
+
 /* ---------------- production table ---------------- */
 
 /* The table is wider than a 360px handset. It scrolls inside its own box so
@@ -623,7 +691,9 @@
 }
 .ad-table {
   width: 100%;
-  min-width: 420px;
+  /* 420 before the Start column was added to each row. The wrap above scrolls
+     horizontally, so this widens the scroll rather than the page. */
+  min-width: 480px;
   border-collapse: collapse;
   font-size: 13.5px;
   font-variant-numeric: tabular-nums;
@@ -677,20 +747,30 @@
   color: var(--green-deep);
 }
 
-.ad-bulk { display: flex; flex-direction: column; gap: 9px; margin-top: 16px; }
-.ad-bulk-btn {
-  width: 100%;
-  min-height: 48px;
+/* The batch action, in the row it belongs to.
+   Replaced the stacked full-width .ad-bulk buttons on 2026-08-16: with six
+   delivery days those were six large blocks below the table, and each one had
+   to name its own date so you could match it back to a row. In the row, the
+   date is the row. */
+/* Trimmed vertical padding so a full-height button doesn't push the row to
+   62px. The button keeps its 44px; the cell gives up the padding instead. */
+.ad-table td.act { text-align: right; white-space: nowrap; padding: 4px 6px; }
+.ad-row-start {
+  /* Fixed width so the column does not reflow when the label becomes "…". */
+  min-width: 62px;
+  /* 44px, same tap target as everything else on the site. */
+  min-height: 44px;
   background: var(--mustard);
   color: var(--cocoa);
   border: 0;
   border-radius: var(--r-s);
-  padding: 13px;
-  font-size: 15px;
+  padding: 8px 12px;
+  font-size: 13.5px;
   font-weight: 700;
   cursor: pointer;
 }
-.ad-bulk-btn:disabled { opacity: 0.6; cursor: default; }
+.ad-row-start:hover:not(:disabled) { background: #e2b530; }
+.ad-row-start:disabled { opacity: 0.6; cursor: default; }
 
 /* ---------------- communities ---------------- */
 

@@ -52,6 +52,25 @@ const shortDate = (iso) => {
   return `${DOW[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]}`;
 };
 
+// "Sun 16 Aug" — no comma inside, because the card's line joins two of these
+// with one: "placed Sun 16 Aug, for Mon 17 Aug".
+const dayDate = (iso) => {
+  const d = parts(iso);
+  return `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}`;
+};
+
+// created_at is a timestamptz, so it has to be reduced to a calendar date in
+// the kitchen's timezone before it can be printed. An order placed at 11:40 PM
+// in Chennai is 6:10 PM UTC — the same instant, a different day — and the card
+// must say the day Gowri would say.
+function isoInZone(ts, timezone) {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date(ts));
+  } catch {
+    return toISO(new Date(ts));
+  }
+}
+
 // The next `count` delivery days, starting with today if today is one — the
 // morning of a delivery is exactly when the forecast matters most.
 function upcomingDeliveryDates(deliveryDays, fromISO, count = 8) {
@@ -73,7 +92,17 @@ const SOURCE_LABEL = {
   weekly: "Weekly",
 };
 
-const TIME_PREF_LABEL = { morning: "Morning", evening: "Evening" };
+/* Which message a status naturally goes with. This is the ONLY link between
+   the two axes on an order card, and it is a suggestion in one direction only:
+   arriving at a status offers the message, and sending a message never moves a
+   status. Dispatch used to write 'dispatched' as a side effect of opening
+   WhatsApp — that is what this table replaces. */
+const MESSAGE_FOR_STATUS = {
+  confirmed: "confirm",
+  preparing: "reminder",
+  dispatched: "dispatch",
+  delivered: "feedback",
+};
 
 const ORDER_SELECT =
   "id,reference,delivery_date,status,source,subtotal,delivery_charge,total,notes," +
@@ -433,11 +462,6 @@ export default function AdminDashboard() {
               key={order.id}
               order={order}
               settings={settings}
-              onDispatched={(id) =>
-                setOrders((prev) =>
-                  prev.map((o) => (o.id === id ? { ...o, status: "dispatched" } : o))
-                )
-              }
               onStatusChanged={reloadAll}
               onExpired={dropToLogin}
             />
@@ -527,8 +551,6 @@ function ManualEntry({
   const [areaId, setAreaId] = useState("");
   const [flat, setFlat] = useState("");
   const [notes, setNotes] = useState("");
-  // "" = untouched, "none" = explicitly chose No preference. Both store null.
-  const [timePref, setTimePref] = useState("");
   const [addressNote, setAddressNote] = useState("");
 
   const [qty, setQty] = useState({});
@@ -642,8 +664,8 @@ function ManualEntry({
           delivery_charge: deliveryCharge,
           total,
           notes: notes.trim() || null,
-          time_preference:
-            timePref === "morning" || timePref === "evening" ? timePref : null,
+          // time_preference is deliberately not sent — the column is nullable
+          // and defaults to null. See the note by the removed control above.
           address_note: addressNote.trim() || null,
         },
         prefer: "return=representation",
@@ -689,7 +711,6 @@ function ManualEntry({
     setAreaId("");
     setFlat("");
     setNotes("");
-    setTimePref("");
     setAddressNote("");
     setQty({});
     setDone(null);
@@ -839,24 +860,12 @@ function ManualEntry({
             ))}
           </div>
 
-          <div className="ad-sub">Preferred time (optional)</div>
-          <div className="bands" role="group" aria-label="Preferred delivery time (optional)">
-            {[
-              ["morning", "Morning"],
-              ["evening", "Evening"],
-              ["none", "No preference"],
-            ].map(([value, label]) => (
-              <button
-                key={label}
-                type="button"
-                className="band"
-                aria-pressed={timePref === value}
-                onClick={() => setTimePref(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          {/* The Morning / Evening / No preference control was removed on
+              2026-08-16. It was the last thing writing orders.time_preference,
+              and the card stopped displaying it when the badge went — so
+              anything typed here landed in a column nobody could see. A field
+              that silently discards what you tell it is worse than no field.
+              The column and place_order's p_time_preference both remain. */}
 
           <div className="field" style={{ marginTop: 14 }}>
             <label htmlFor="maddr">Anything to help find them? (optional)</label>
@@ -902,29 +911,56 @@ function ManualEntry({
 
 /* ================================================== order card */
 
-function OrderCard({ order, settings, onDispatched, onStatusChanged, onExpired }) {
+/* The card carries two independent axes, and keeping them apart is the whole
+   design:
+
+     STATUS   where the order has got to. One row, one write. Advancing or
+              stepping back is the ONLY thing on this card that touches
+              orders.status.
+     MESSAGE  what gets said to the customer. One WhatsApp button opening a
+              short menu. It never writes anything.
+
+   They used to be tangled: Back/Preparing changed status, Confirm sent a
+   message, and Dispatch quietly did both. Five controls, one of them doing two
+   unrelated jobs — which is exactly what made it unpredictable in testing.
+   Dispatch no longer writes status.
+
+   Advancing the status OFFERS the matching message and never sends it. §20 and
+   §21 both put a human in that loop deliberately: Gowri taps, reviews, sends. */
+function OrderCard({ order, settings, onStatusChanged, onExpired }) {
   const customer = order.customer ?? {};
   const waNumber = customer.phone ? `91${customer.phone}` : null;
   const firstName = (customer.name ?? "").trim().split(" ")[0] || "there";
+  const timezone = settings?.timezone ?? "Asia/Kolkata";
 
-  const [dispatchError, setDispatchError] = useState(null);
+  const [error, setError] = useState(null);
   const [statusBusy, setStatusBusy] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Which message the last status change suggests. A suggestion only — it is
+  // cleared by sending or by dismissing, and nothing sends on its own.
+  const [offer, setOffer] = useState(null);
 
   // Every transition is a deliberate tap. Nothing advances on a timer or at
-  // the cutoff — §20/§21 keep a human in the loop for each one.
+  // the cutoff.
   function setStatus(to) {
     setStatusBusy(true);
-    setDispatchError(null);
+    setError(null);
     db(`orders?id=eq.${order.id}`, {
       method: "PATCH",
       body: { status: to },
       prefer: "return=minimal",
     })
-      .then(() => onStatusChanged?.())
+      .then(() => {
+        // The status we just wrote, not order.status. The prop only catches up
+        // after onStatusChanged's reload comes back, so reading it here would
+        // caption the offer with the status we just left.
+        setOffer(MESSAGE_FOR_STATUS[to] ? { to, key: MESSAGE_FOR_STATUS[to] } : null);
+        onStatusChanged?.();
+      })
       .catch((e) => {
         if (e instanceof SessionExpired) onExpired();
-        else setDispatchError(e.message);
+        else setError(e.message);
       })
       .finally(() => {
         setStatusBusy(false);
@@ -956,41 +992,51 @@ function OrderCard({ order, settings, onDispatched, onStatusChanged, onExpired }
     ? ` You asked for ${order.time_preference} delivery — we'll aim for that.`
     : "";
 
-  // Both messages carry the whole order, not just its number: the customer
+  // Every message carries the whole order, not just its number: the customer
   // should not have to go and look up what NAV-002 was.
   const packEcho = packs ? ` — ${packs}` : "";
 
-  const confirmText =
-    `Hi ${firstName}, this is Navera. Your order ${order.reference} is confirmed for ` +
-    `${shortDate(order.delivery_date)}${packEcho}. ` +
-    `${rupees(order.total)} to pay on delivery.${prefEcho} ` +
-    `I'll confirm the delivery time with you closer to the day. Thank you!`;
+  const messages = {
+    confirm: {
+      label: "Confirm",
+      hint: "the order is accepted",
+      text:
+        `Hi ${firstName}, this is Navera. Your order ${order.reference} is confirmed for ` +
+        `${shortDate(order.delivery_date)}${packEcho}. ` +
+        `${rupees(order.total)} to pay on delivery.${prefEcho} ` +
+        `I'll confirm the delivery time with you closer to the day. Thank you!`,
+    },
+    // §21 — prepared the evening before. It commits to a day and to tonight's
+    // batch, never to a delivery time.
+    reminder: {
+      label: "Reminder",
+      hint: "we're making it tonight",
+      text:
+        `Hi ${firstName}, this is Navera. Your paneer${packEcho} is being made fresh ` +
+        `tonight for ${shortDate(order.delivery_date)}. ` +
+        `${rupees(order.total)} to pay on delivery.`,
+    },
+    dispatch: {
+      label: "Dispatch",
+      hint: "it's on its way",
+      text:
+        `Hi ${firstName}, your Navera order ${order.reference} is packed and on its way` +
+        `${packEcho}. ${rupees(order.total)} to pay on delivery.`,
+    },
+    // §27 — asked after delivery, and asked as a person rather than a form.
+    feedback: {
+      label: "Feedback",
+      hint: "how was it?",
+      text:
+        `Hi ${firstName}, hope the paneer was good. If anything wasn't right, ` +
+        `tell me and I'll put it right next time. — Navera`,
+    },
+  };
 
-  const dispatchText =
-    `Hi ${firstName}, your Navera order ${order.reference} is packed and on its way` +
-    `${packEcho}. ${rupees(order.total)} to pay on delivery.`;
-
-  // The Dispatch link navigates immediately, same as Confirm — a real anchor
-  // click, not blocked by popup heuristics. The status write runs alongside
-  // it in the background rather than gating the navigation: window.open()
-  // called after an awaited PATCH loses the click's user-gesture window and
-  // gets silently popup-blocked in real browsers (confirmed against this
-  // build — the WhatsApp tab failed to open every time with that ordering).
-  // The WhatsApp message itself still needs a press of WhatsApp's own Send
-  // button, so nothing goes out without a human reviewing it first.
-  function onDispatchClick() {
-    setDispatchError(null);
-    db(`orders?id=eq.${order.id}`, {
-      method: "PATCH",
-      body: { status: "dispatched" },
-      prefer: "return=minimal",
-    })
-      .then(() => onDispatched(order.id))
-      .catch((e) => {
-        if (e instanceof SessionExpired) onExpired();
-        else setDispatchError(e.message);
-      });
-  }
+  // Every one of these is a plain anchor to wa.me and nothing more. WhatsApp
+  // opens with the text prefilled and still needs its own Send pressed, so no
+  // message ever leaves without a human reading it first.
+  const MENU = ["confirm", "dispatch", "reminder", "feedback"];
 
   return (
     <article className={`ad-order${order.status === "cancelled" ? " is-cancelled" : ""}`}>
@@ -1012,6 +1058,17 @@ function OrderCard({ order, settings, onDispatched, onStatusChanged, onExpired }
         </div>
       </div>
 
+      {/* When it came in, and what it is for. Two dates on one line because
+          the gap between them is the thing worth seeing at a glance — an order
+          placed today for Sunday behaves nothing like one placed a week ago.
+          Deliberately NOT added to the Production table: that table aggregates
+          by delivery date, and several orders on one row can have been placed
+          on different days, so there is no single order date to print there. */}
+      <div className="ad-order-when">
+        placed {dayDate(isoInZone(order.created_at, timezone))}, for{" "}
+        {dayDate(order.delivery_date)}
+      </div>
+
       <div className="ad-order-packs">{packs || "No packs"}</div>
 
       <div className="ad-order-line">
@@ -1019,12 +1076,11 @@ function OrderCard({ order, settings, onDispatched, onStatusChanged, onExpired }
         <span>{rupees(order.total)}</span>
       </div>
 
-      {/* Both optional — when absent they leave no trace, rather than an empty label. */}
-      {order.time_preference && (
-        <div className="ad-order-pref">
-          Prefers {TIME_PREF_LABEL[order.time_preference] ?? order.time_preference}
-        </div>
-      )}
+      {/* The "Prefers Morning" badge was removed on 2026-08-16 — dead UI. The
+          customer page stopped sending a preference, so it only ever appeared
+          on two legacy test rows. orders.time_preference and place_order's
+          p_time_preference both stay; only the badge is gone. Note that manual
+          entry can still set one, and the Confirm template still echoes it. */}
 
       {order.address_note && (
         <div className="ad-order-find">{order.address_note}</div>
@@ -1032,7 +1088,7 @@ function OrderCard({ order, settings, onDispatched, onStatusChanged, onExpired }
 
       {order.notes && <div className="ad-order-note">{order.notes}</div>}
 
-      {dispatchError && <div className="ad-err">{dispatchError}</div>}
+      {error && <div className="ad-err">{error}</div>}
 
       {order.status === "cancelled" ? (
         <>
@@ -1052,8 +1108,8 @@ function OrderCard({ order, settings, onDispatched, onStatusChanged, onExpired }
         </>
       ) : (
         <>
-          {/* Status first: it is the thing that changes every day. The
-              WhatsApp templates sit below, unchanged. */}
+          {/* ---- axis 1: status. The only writer on this card. ---- */}
+          <div className="ad-axis">Status</div>
           <div className="ad-order-steps">
             <button
               type="button"
@@ -1072,6 +1128,66 @@ function OrderCard({ order, settings, onDispatched, onStatusChanged, onExpired }
               {forward ? STATUS_LABEL[forward] : "Delivered"} →
             </button>
           </div>
+
+          {/* The bridge between the two axes, and the only place they touch:
+              a status change SUGGESTS its message. Tapping it opens WhatsApp
+              with the text prefilled; WhatsApp's own Send still has to be
+              pressed. Nothing here sends, and dismissing changes no data. */}
+          {offer && waNumber && messages[offer.key] && (
+            <div className="ad-offer" role="status">
+              <span>
+                Now {STATUS_LABEL[offer.to] ?? offer.to}. Send the{" "}
+                {messages[offer.key].label.toLowerCase()} message?
+              </span>
+              <div className="ad-offer-actions">
+                <a
+                  className="ad-wa"
+                  href={link(messages[offer.key].text)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setOffer(null)}
+                >
+                  {messages[offer.key].label}
+                </a>
+                <button type="button" className="ad-mini" onClick={() => setOffer(null)}>
+                  Not now
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ---- axis 2: messages. Writes nothing, ever. ---- */}
+          {waNumber && (
+            <>
+              <div className="ad-axis">Message</div>
+              <button
+                type="button"
+                className="ad-wa ad-wa-toggle"
+                aria-expanded={menuOpen}
+                aria-controls={`wa-${order.id}`}
+                onClick={() => setMenuOpen((v) => !v)}
+              >
+                WhatsApp {customer.name ?? "customer"} {menuOpen ? "▴" : "▾"}
+              </button>
+              {menuOpen && (
+                <div className="ad-wa-menu" id={`wa-${order.id}`}>
+                  {MENU.map((key) => (
+                    <a
+                      key={key}
+                      className="ad-wa-item"
+                      href={link(messages[key].text)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <strong>{messages[key].label}</strong>
+                      <span>{messages[key].hint}</span>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
 
           {confirmCancel ? (
             <div className="ad-confirm" role="alert">
@@ -1105,23 +1221,6 @@ function OrderCard({ order, settings, onDispatched, onStatusChanged, onExpired }
             >
               Cancel this order
             </button>
-          )}
-
-          {waNumber && (
-            <div className="ad-order-actions">
-              <a className="ad-wa" href={link(confirmText)} target="_blank" rel="noopener noreferrer">
-                Confirm
-              </a>
-              <a
-                className="ad-wa"
-                href={link(dispatchText)}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={onDispatchClick}
-              >
-                Dispatch
-              </a>
-            </div>
           )}
         </>
       )}

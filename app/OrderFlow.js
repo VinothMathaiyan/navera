@@ -1,51 +1,81 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { rpc } from "../lib/db";
+import Masthead from "./Masthead";
+import {
+  DOW,
+  DOW_LONG,
+  MON,
+  clock,
+  longDate,
+  parseDate,
+  rupees,
+  shiftDays,
+} from "./format";
 
-const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const DOW_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-const parseDate = (s) => {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, m - 1, d);
-};
-const rupees = (n) => "₹" + Number(n).toLocaleString("en-IN");
-
-const shiftDays = (d, n) => {
-  const out = new Date(d);
-  out.setDate(out.getDate() + n);
-  return out;
-};
 const sameDay = (a, b) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
-// "Sunday, 16 Aug"
-const longDate = (d) => `${DOW_LONG[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]}`;
+/* ---------------------------------------------------------------- remembering
 
-// get_ordering_info formats the cutoff with to_char(...'HH12:MI AM'), which
-// pads to "06:00 PM". Nobody writes the hour that way. Trimmed here rather than
-// in the database, so no settings or function signature has to change.
-const clock = (t) => (t ?? "").replace(/^0/, "");
+   Who you are, kept on your own device and nowhere else.
 
-/* One way of writing an order out in words — "1 × 500g, 2 × 200g", biggest pack
-   first, the way you'd say it aloud. Used by the summary, the confirmation card
-   and the WhatsApp message so all three always agree, spaced × throughout. */
-function packBreakdown(items, products, sep = " × ") {
-  return items
-    .map((it) => {
-      const p = products.find((x) => x.id === it.product_id);
-      return p ? { grams: Number(p.weight_grams), qty: it.quantity } : null;
-    })
-    .filter(Boolean)
-    .sort((a, b) => b.grams - a.grams)
-    .map((l) => `${l.qty}${sep}${l.grams}g`)
-    .join(", ");
+   This is deliberately localStorage and NOT a lookup by phone number against
+   the database. A "type your number and we'll fill in the rest" field would
+   hand anybody your neighbour's name, block and flat for the cost of guessing
+   ten digits — the exact exposure the whole anon-deny-by-default posture exists
+   to prevent. The admin's phone-first lookup is a different thing and stays:
+   it sits behind Supabase Auth.
+
+   So: no order history here, no token, no server call. Four fields the customer
+   typed themselves, on the device they typed them on, offered back for review.
+*/
+const REMEMBER_KEY = "navera.you.v1";
+
+function loadRemembered() {
+  try {
+    const raw = window.localStorage.getItem(REMEMBER_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw);
+    if (!v || typeof v !== "object") return null;
+    const str = (x) => (typeof x === "string" ? x : "");
+    const out = {
+      name: str(v.name).slice(0, 80),
+      phone: str(v.phone).replace(/\D/g, "").slice(0, 10),
+      areaId: str(v.areaId),
+      flat: str(v.flat).slice(0, 60),
+    };
+    // Half-empty saved details are worse than none: they look filled in while
+    // still failing at the Confirm button.
+    return out.name && out.phone ? out : null;
+  } catch {
+    // Safari in private mode throws on localStorage rather than returning null.
+    // Not being able to remember is never a reason to break the order form.
+    return null;
+  }
+}
+
+function saveRemembered(v) {
+  try {
+    window.localStorage.setItem(REMEMBER_KEY, JSON.stringify(v));
+  } catch {
+    /* ignore — see above */
+  }
+}
+
+function forgetRemembered() {
+  try {
+    window.localStorage.removeItem(REMEMBER_KEY);
+  } catch {
+    /* ignore — see above */
+  }
 }
 
 export default function OrderFlow({ info, loadError }) {
+  const router = useRouter();
+
   const [qty, setQty] = useState({});
   const [date, setDate] = useState(info?.delivery_dates?.[0] ?? null);
   const [name, setName] = useState("");
@@ -55,8 +85,8 @@ export default function OrderFlow({ info, loadError }) {
   const [addressNote, setAddressNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const [done, setDone] = useState(null);
   const [minsLeft, setMinsLeft] = useState(null);
+  const [remembered, setRemembered] = useState(false);
 
   // Minutes to cutoff, seeded from server time so a wrong phone clock can't lie.
   useEffect(() => {
@@ -70,6 +100,53 @@ export default function OrderFlow({ info, loadError }) {
     const id = setInterval(() => setMinsLeft((v) => (v === null ? null : v - 1)), 60000);
     return () => clearInterval(id);
   }, [info]);
+
+  // Read after mount, never during render: localStorage does not exist on the
+  // server, and seeding state from it would make the server and client HTML
+  // disagree.
+  useEffect(() => {
+    const saved = loadRemembered();
+    if (!saved) return;
+    setName(saved.name);
+    setPhone(saved.phone);
+    setFlat(saved.flat);
+    // Only if that community is still being served. A retired area would
+    // otherwise sit in the select as a stale id that fails validation at the
+    // very last step, with nothing on screen explaining why.
+    if (saved.areaId && (info?.areas ?? []).some((a) => a.id === saved.areaId)) {
+      setAreaId(saved.areaId);
+    }
+    setRemembered(true);
+  }, [info]);
+
+  function notYou() {
+    forgetRemembered();
+    setName("");
+    setPhone("");
+    setAreaId("");
+    setFlat("");
+    setRemembered(false);
+  }
+
+  /* ------------------------------------------------ moving back a step */
+
+  // Packs, day and details are all on one screen and all stay editable, but
+  // "scroll back up and find it yourself" is not navigation. Each Change
+  // control in the summary moves to its step and puts focus there, so the
+  // journey back is the same one tap for a thumb and for a screen reader.
+  const packsStep = useRef(null);
+  const dateStep = useRef(null);
+  const detailsStep = useRef(null);
+
+  const backTo = useCallback((ref) => {
+    const el = ref.current;
+    if (!el) return;
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    el.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "start" });
+    // preventScroll, or the browser's own focus scroll fights the smooth one
+    // above and the page lands somewhere neither of them intended.
+    el.focus({ preventScroll: true });
+  }, []);
 
   const items = useMemo(
     () =>
@@ -130,16 +207,28 @@ export default function OrderFlow({ info, loadError }) {
         // nullable and defaulting to null, so nothing here depends on it.
         p_address_note: addressNote.trim() || null,
       });
-      // Snapshot what was ordered alongside the server's answer. place_order
-      // returns the reference, date, total, community and flat but not the
-      // packs, and this is the one order the confirmation screen is ever
-      // allowed to speak about. community/flat come from the response rather
-      // than form state so a re-render can't desync them.
-      setDone({ ...res, packs: packBreakdown(items, info.products, " × ") });
-      window.scrollTo({ top: 0 });
+
+      if (!res?.access_token || !res?.reference) {
+        // The order itself did go in — place_order is one transaction — so this
+        // must never read like a failure to the customer.
+        throw new Error(
+          "Your order is placed, but we couldn't open your order page. " +
+            "WhatsApp us and we'll confirm it straight away."
+        );
+      }
+
+      // Saved only once an order has actually succeeded, and from the values
+      // the server accepted rather than from whatever is in the boxes.
+      saveRemembered({ name: res.name ?? name.trim(), phone, areaId, flat: res.flat ?? flat.trim() });
+
+      // The confirmation is a real page now, not a piece of state. push, not
+      // replace, so Back from the confirmation returns to a fresh order form
+      // rather than dropping the customer off the site.
+      router.push(`/my/${res.access_token}?placed=${encodeURIComponent(res.reference)}`);
+      // busy is deliberately left set. The button must stay dead while the
+      // private page loads, or an impatient second tap places a second order.
     } catch (e) {
       setError(e.message);
-    } finally {
       setBusy(false);
     }
   }
@@ -159,73 +248,6 @@ export default function OrderFlow({ info, loadError }) {
             <a className="wa" href={waLink("Hi Navera, I'd like to place an order.")} {...newTab}>
               WhatsApp us<NewTabNote />
             </a>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  /* ------------------------------------------------ confirmation */
-
-  if (done) {
-    const d = parseDate(done.delivery_date);
-    const dayName = DOW_LONG[d.getDay()];
-    const dateStr = longDate(d);
-    // Every delivery is prepared the evening before — derived, never a lookup
-    // table, so it stays right if the delivery days ever change again.
-    const prepDayName = DOW_LONG[shiftDays(d, -1).getDay()];
-
-    // Exactly one order — this one, never a running list. No price: it goes
-    // stale and a support chat doesn't need it. And no access_token: that is a
-    // private credential and WhatsApp messages get forwarded.
-    const enquiry =
-      `Hi Navera, I've placed order ${done.reference} for ${done.packs} paneer on ${dateStr}.`;
-
-    return (
-      <main>
-        <Masthead />
-        <div className="wrap done">
-          <div className="tick" aria-hidden="true">
-            ✓
-          </div>
-          <h2 className="done-h">Thank you, {done.name.split(" ")[0]}</h2>
-          <p className="msg">
-            Your paneer will be prepared on {prepDayName} evening and delivered
-            on {dayName}. We&apos;ll confirm the delivery details with you on
-            WhatsApp.
-          </p>
-
-          <div className="card">
-            <div className="k">Delivery</div>
-            <div className="v">{dateStr}</div>
-            {done.packs && (
-              <>
-                <div className="k">Pack</div>
-                <div className="v">{done.packs}</div>
-              </>
-            )}
-            {/* Straight from the place_order response, not from form state. */}
-            {(done.community || done.flat) && (
-              <>
-                <div className="k">Deliver to</div>
-                <div className="v">
-                  {[done.community, done.flat].filter(Boolean).join(", ")}
-                </div>
-              </>
-            )}
-            <div className="k">To pay on delivery</div>
-            <div className="v">{rupees(done.total)}</div>
-            <div className="ordid">Order {done.reference}</div>
-          </div>
-
-          <div className="foot">
-            <a className="wa" href={waLink(enquiry)} {...newTab}>
-              Message us about this order
-              <NewTabNote />
-            </a>
-            <p className="fssai">
-              Keep this page — you can reorder from it next time.
-            </p>
           </div>
         </div>
       </main>
@@ -261,6 +283,9 @@ export default function OrderFlow({ info, loadError }) {
   const tomorrow = shiftDays(today, 1);
   const justClosed = info.past_cutoff && deliveryWeekdays.has(tomorrow.getDay()) ? tomorrow : null;
 
+  const chosenArea = info.areas.find((a) => a.id === areaId);
+  const addressSummary = [chosenArea?.name, flat.trim()].filter(Boolean).join(", ");
+
   return (
     <main>
       <Masthead />
@@ -290,10 +315,10 @@ export default function OrderFlow({ info, loadError }) {
 
       <div className="wrap">
         {/* 1 — packs */}
-        <section className="step">
+        <section className="step" ref={packsStep} tabIndex={-1} aria-labelledby="step-packs">
           <div className="step-head">
             <span className="step-num">1</span>
-            <h2>What would you like?</h2>
+            <h2 id="step-packs">What would you like?</h2>
           </div>
 
           <div className="packs" role="group" aria-label="Pack sizes">
@@ -348,10 +373,10 @@ export default function OrderFlow({ info, loadError }) {
         </section>
 
         {/* 2 — date */}
-        <section className="step">
+        <section className="step" ref={dateStep} tabIndex={-1} aria-labelledby="step-date">
           <div className="step-head">
             <span className="step-num">2</span>
-            <h2>When would you like it?</h2>
+            <h2 id="step-date">When would you like it?</h2>
           </div>
           {/* Three options only. get_ordering_info already returns the correct
               set for any moment, so this is a slice, not a recalculation. */}
@@ -393,11 +418,22 @@ export default function OrderFlow({ info, loadError }) {
         </section>
 
         {/* 3 — details */}
-        <section className="step">
+        <section className="step" ref={detailsStep} tabIndex={-1} aria-labelledby="step-details">
           <div className="step-head">
             <span className="step-num">3</span>
-            <h2>Where should we deliver?</h2>
+            <h2 id="step-details">Where should we deliver?</h2>
           </div>
+
+          {/* Families share a phone and a laptop, so the way out has to be on
+              screen rather than buried in browser settings. */}
+          {remembered && (
+            <p className="remembered">
+              These are the details you used last time.{" "}
+              <button type="button" className="notyou" onClick={notYou}>
+                Not you?
+              </button>
+            </p>
+          )}
 
           <div className="field">
             <label htmlFor="nm">Your name</label>
@@ -486,8 +522,22 @@ export default function OrderFlow({ info, loadError }) {
           </div>
         </section>
 
-        {/* summary */}
+        {/* summary — now also the review step. It shows the three things being
+            committed to, each with its own way back, so nothing is confirmed
+            that the customer hasn't had a last chance to change. */}
         <div className="summary">
+          <div className="sum-head">
+            <span>Your order</span>
+            <button
+              type="button"
+              className="sum-change"
+              aria-label="Change your packs"
+              onClick={() => backTo(packsStep)}
+            >
+              Change
+            </button>
+          </div>
+
           {orderedLines.map((l) => (
             <div className="line" key={l.product_id}>
               <span>
@@ -503,6 +553,33 @@ export default function OrderFlow({ info, loadError }) {
               <span>{rupees(info.delivery_charge)}</span>
             </div>
           )}
+
+          <div className="sum-row">
+            <span className="k">Delivery day</span>
+            <span className="v">{date ? longDate(parseDate(date)) : "Not chosen yet"}</span>
+            <button
+              type="button"
+              className="sum-change"
+              aria-label="Change your delivery day"
+              onClick={() => backTo(dateStep)}
+            >
+              Change
+            </button>
+          </div>
+
+          <div className="sum-row">
+            <span className="k">Deliver to</span>
+            <span className="v">{addressSummary || "Not filled in yet"}</span>
+            <button
+              type="button"
+              className="sum-change"
+              aria-label="Change your delivery details"
+              onClick={() => backTo(detailsStep)}
+            >
+              Change
+            </button>
+          </div>
+
           <div className="total">
             <span className="k">To pay on delivery</span>
             <span className="v">{rupees(total)}</span>
@@ -590,33 +667,3 @@ export default function OrderFlow({ info, loadError }) {
    half-filled form. They all open in a new tab, and say so for screen readers. */
 const newTab = { target: "_blank", rel: "noopener noreferrer" };
 const NewTabNote = () => <span className="sr-only"> (opens in a new tab)</span>;
-
-function Masthead() {
-  return (
-    <header className="masthead">
-      {/* public/Logo.png is the founder's finished artwork on its own cream
-          ground — opaque, not transparent, and deliberately left unprocessed.
-          The masthead background is set to that same cream (see --masthead in
-          globals.css) so the image has no visible edge. Do not run this file
-          through background removal; that was only ever needed for the old
-          logo, which had to sit on a dark green header. */}
-      <div className="logo-wrap">
-        <Image
-          src="/Logo.png"
-          alt="Navera Fresh Paneer"
-          fill
-          priority
-          sizes="(max-width: 599px) 78vw, 340px"
-          style={{ objectFit: "contain" }}
-        />
-      </div>
-      <div className="rule" />
-      {/* "Fresh paneer" is already in the logo above — saying it again here read
-          as a stutter, so the lede is just the promise. */}
-      <h1 className="lede">
-        <em>Prepared after your order.</em>
-      </h1>
-      <p className="two">From free-roaming cared cows, around 100 km away from Chennai.</p>
-    </header>
-  );
-}

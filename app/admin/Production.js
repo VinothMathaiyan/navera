@@ -41,9 +41,11 @@ export default function Production({ orders, settings, dates, today, onChanged, 
     }
   }
 
-  // One tap for the whole evening's batch. Filtering on status=eq.confirmed in
-  // the query means cancelled orders — and anything already further along —
-  // are skipped by the database rather than by a client-side loop.
+  // One tap for the whole evening's batch — the batch is the unit that gets
+  // marked, not fifteen individual taps at 9 PM. Filtering on
+  // status=eq.confirmed in the query means cancelled orders — and anything
+  // already further along — are skipped by the database rather than by a
+  // client-side loop.
   function markPreparing(date) {
     setBusyDate(date);
     run(async () => {
@@ -100,6 +102,9 @@ export default function Production({ orders, settings, dates, today, onChanged, 
               <th scope="col" className="num">Paneer</th>
               <th scope="col" className="num">Milk</th>
               <th scope="col" className="num">Lemons</th>
+              {/* No visible header: the buttons below label themselves, and a
+                  word here would read as another column of data. */}
+              <th scope="col"><span className="sr-only">Start the batch</span></th>
             </tr>
           </thead>
           <tbody>
@@ -115,11 +120,35 @@ export default function Production({ orders, settings, dates, today, onChanged, 
                 <td className="num">{r.kg > 0 ? `${kg(r.kg)} kg` : "—"}</td>
                 <td className="num">{r.milk > 0 ? `${r.milk} L` : "—"}</td>
                 <td className="num">{r.lemons > 0 ? r.lemons : "—"}</td>
+                {/* The action sits beside the numbers it acts on, so there is
+                    no matching a date in a button to a date in the table.
+                    Only on rows with something left to make — a Start on a
+                    finished or empty day is a button that does nothing. */}
+                <td className="act">
+                  {r.toMake > 0 ? (
+                    <button
+                      type="button"
+                      className="ad-row-start"
+                      disabled={busyDate === r.date}
+                      // "Start" alone is ambiguous once it is out of a
+                      // full-width block, so the accessible name carries the
+                      // date and the count the visible column already shows.
+                      aria-label={`Start ${short(r.date)} — ${r.toMake} order${
+                        r.toMake === 1 ? "" : "s"
+                      }`}
+                      onClick={() => markPreparing(r.date)}
+                    >
+                      {busyDate === r.date ? "…" : "Start"}
+                    </button>
+                  ) : (
+                    <span className="soft">—</span>
+                  )}
+                </td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="ad-fc-empty">
+                <td colSpan={8} className="ad-fc-empty">
                   No delivery days are configured. Set them under Settings.
                 </td>
               </tr>
@@ -134,6 +163,7 @@ export default function Production({ orders, settings, dates, today, onChanged, 
               <td className="num">{totals.kg > 0 ? `${kg(totals.kg)} kg` : "—"}</td>
               <td className="num">{totals.milk > 0 ? `${totals.milk} L` : "—"}</td>
               <td className="num">{totals.lemons > 0 ? totals.lemons : "—"}</td>
+              <td />
             </tr>
           </tfoot>
         </table>
@@ -142,7 +172,8 @@ export default function Production({ orders, settings, dates, today, onChanged, 
       <p className="ad-note">
         Paneer, milk and lemons count the <strong>still to make</strong> orders
         only — anything already preparing, dispatched or delivered is left out,
-        and cancelled orders are excluded entirely.
+        and cancelled orders are excluded entirely. <strong>Start</strong> marks
+        that whole evening&apos;s batch as preparing.
       </p>
 
       {lastBulk && (
@@ -157,25 +188,6 @@ export default function Production({ orders, settings, dates, today, onChanged, 
         </div>
       )}
 
-      {/* One batch per evening covers all of a date's orders, so the batch is
-          the unit that gets marked — not fifteen individual taps at 9 PM. */}
-      <div className="ad-bulk">
-        {rows
-          .filter((r) => r.toMake > 0)
-          .map((r) => (
-            <button
-              key={r.date}
-              type="button"
-              className="ad-bulk-btn"
-              disabled={busyDate === r.date}
-              onClick={() => markPreparing(r.date)}
-            >
-              {busyDate === r.date
-                ? "Marking…"
-                : `Start ${short(r.date)} — ${r.toMake} order${r.toMake === 1 ? "" : "s"}`}
-            </button>
-          ))}
-      </div>
     </section>
   );
 }

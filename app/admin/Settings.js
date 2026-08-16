@@ -294,10 +294,15 @@ export default function Settings({ settings, onSaved, onExpired }) {
             yourselves about when the run usually happens; it is deliberately
             not read by the customer page or by the WhatsApp templates, and it
             must not start being read by them. */}
+        {/* Updated 2026-08-16: this used to say customers "pick Morning or
+            Evening as a preference". They no longer pick anything — that
+            control left the customer page on 2026-08-15 and the admin's manual
+            entry on 2026-08-16. The site now commits to a day and the time is
+            agreed person to person. */}
         <p className="ad-fieldnote">
           <strong>Your reference only.</strong> Customers are never shown this
-          and are never promised a time — they pick Morning or Evening as a
-          preference and the real time is agreed on WhatsApp.
+          and are never promised a time — the day is what&apos;s committed to,
+          and the delivery time is agreed with them on WhatsApp.
         </p>
       </div>
 
