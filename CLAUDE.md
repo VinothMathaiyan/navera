@@ -220,12 +220,25 @@ plus a valid mixed-pack order — all passed before this was trusted.
 - **A folder under `app/` whose name starts with `_` is private to Next and
   gets no route** — `app/admin/__cardtest/` 404s, `app/admin/cardtest/` does
   not. Worth knowing before debugging a "missing" page for ten minutes.
-- **Not yet deployed.** A Vercel deploy attempt hit `403: You don't have
-  permission to create a project` — the connected Vercel account could read
-  the existing `wellness-connect` project but not create a new one. Likely a
-  team-role restriction. Resolve via the Vercel dashboard (create an empty
-  project named `navera` manually, or fix account/team permissions) before
-  the first deploy.
+- **Deployed and live.** The old note here said "not yet deployed" and
+  described a `403: You don't have permission to create a project`. That was
+  resolved long ago — the `navera` project exists on Vercel and every push to
+  `main` has auto-deployed since. Corrected 2026-08-16 after confirming 18
+  deployments against the repo.
+  - Production: **https://navera-rouge.vercel.app** (aliases also include
+    `navera-vinothm13579-7150s-projects.vercel.app` and the branch alias
+    `navera-git-main-…`). Team `vinothm13579-7150's projects`, project
+    `prj_mUpNLTIUiVSxZfFSdYahx9rKs3Fb`, framework auto-detected as Next.js,
+    region `iad1`.
+  - There is no `.vercel/project.json` in the repo and none is needed —
+    deploys come from the GitHub integration, not from `npx vercel`.
+  - **`READY` is not proof the change shipped.** It means the build finished.
+    Verify the deployed artefact itself: fetch the production URL and check
+    for markup only the new code emits, and for old markup that should be
+    gone. `/` and `/my/<token>` are server-rendered so their HTML shows it
+    directly; `/admin` is a client component, so pull the
+    `/_next/static/chunks/*.js` it references and grep those, plus
+    `/_next/static/css/*` for style changes.
 
 ### Admin — a different access pattern on purpose
 
