@@ -11,6 +11,7 @@
 // every request, which is exactly what "survives a refresh" has to mean.
 
 import Link from "next/link";
+import AccountLink from "./AccountLink";
 import { rpc } from "../../../lib/db";
 import Masthead from "../../Masthead";
 import {
@@ -243,9 +244,12 @@ export default async function MyNaveraPage({ params, searchParams }) {
             no way of knowing, and guessing would be its own small leak. */}
         {orderScoped ? (
           <p className="my-scope">
-            This link opens order {lead.reference} on its own. If you&apos;ve
-            ordered before, your earlier orders are on the link from your first
-            order — message us if you can&apos;t find it.
+            This link opens order {lead.reference} on its own.{" "}
+            {/* Whether this reader holds their account-wide link is knowable
+                only on their own device — see AccountLink. The sentence reads
+                correctly either way, and the order above it is already
+                complete without this. */}
+            <AccountLink />
           </p>
         ) : (
           <>

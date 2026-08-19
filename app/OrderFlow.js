@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { rpc } from "../lib/db";
 import Masthead from "./Masthead";
 import {
@@ -29,10 +30,31 @@ const sameDay = (a, b) =>
    to prevent. The admin's phone-first lookup is a different thing and stays:
    it sits behind Supabase Auth.
 
-   So: no order history here, no token, no server call. Four fields the customer
+   So: no order history here and no server lookup. Four fields the customer
    typed themselves, on the device they typed them on, offered back for review.
+
+   Since 2026-08-19 this also holds `accountToken` — the account-wide link, when
+   the customer has one. That is a credential, and it is kept under exactly the
+   same rules as the rest of this record: written only after an order the server
+   answered with an account token, read only on this device, cleared by "Not
+   you?" along with everything else. It may be used for one thing only — an
+   internal link to /my/<token>, this site's own private page. It must never go
+   into a WhatsApp message, an outbound href, or a query parameter, because
+   those get forwarded, logged and pasted into chats.
+
+   Why it is here at all: place_order hands an account-wide link to a brand-new
+   customer and an order-scoped one to every returning customer, deliberately —
+   a phone number on a public form is not proof of ownership. Without somewhere
+   to keep the first link, a customer who reorders four times finishes with four
+   isolated single-order pages and no history at all, which guts Order Again.
+   The device remembers it; the server still never re-issues it.
 */
 const REMEMBER_KEY = "navera.you.v1";
+
+// 48 lowercase hex as issued, but bounded rather than pinned — the same cheap
+// sanity check the database functions apply, for the same reason: it exists to
+// keep nonsense out of a URL, not to validate anything.
+const looksLikeToken = (t) => typeof t === "string" && /^[0-9a-f]{24,128}$/i.test(t);
 
 function loadRemembered() {
   try {
@@ -46,6 +68,10 @@ function loadRemembered() {
       phone: str(v.phone).replace(/\D/g, "").slice(0, 10),
       areaId: str(v.areaId),
       flat: str(v.flat).slice(0, 60),
+      // Absent for every record written before 2026-08-19, and absent for a
+      // device whose first order was a repeat one. Optional on purpose: the
+      // form works exactly as before without it.
+      accountToken: looksLikeToken(v.accountToken) ? v.accountToken : "",
     };
     // Half-empty saved details are worse than none: they look filled in while
     // still failing at the Confirm button.
@@ -87,6 +113,10 @@ export default function OrderFlow({ info, loadError }) {
   const [error, setError] = useState(null);
   const [minsLeft, setMinsLeft] = useState(null);
   const [remembered, setRemembered] = useState(false);
+  // The account-wide link, if this device has earned one. Never rendered as
+  // text and never sent anywhere — it is only ever the href of an internal
+  // link to this site's own private page.
+  const [accountToken, setAccountToken] = useState("");
 
   // Minutes to cutoff, seeded from server time so a wrong phone clock can't lie.
   useEffect(() => {
@@ -116,15 +146,20 @@ export default function OrderFlow({ info, loadError }) {
     if (saved.areaId && (info?.areas ?? []).some((a) => a.id === saved.areaId)) {
       setAreaId(saved.areaId);
     }
+    setAccountToken(saved.accountToken);
     setRemembered(true);
   }, [info]);
 
   function notYou() {
+    // forgetRemembered drops the whole record, the account link with it — a
+    // shared laptop must not leave one person's order history one tap away
+    // from the next person to use it.
     forgetRemembered();
     setName("");
     setPhone("");
     setAreaId("");
     setFlat("");
+    setAccountToken("");
     setRemembered(false);
   }
 
@@ -217,9 +252,33 @@ export default function OrderFlow({ info, loadError }) {
         );
       }
 
+      // Which kind of link came back? place_order does not say, and the two are
+      // indistinguishable on sight — both are 48 hex characters. Only an
+      // account token resolves through get_my_orders, so that is the question
+      // we ask, and we ask it exactly once: on the order that first earns this
+      // device a link. A returning customer's order-scoped token must never
+      // replace an account link we already hold, so when we hold one we skip
+      // the call entirely and keep what we have.
+      let keepToken = accountToken;
+      if (!keepToken && res.access_token) {
+        try {
+          const mine = await rpc("get_my_orders", { p_token: res.access_token });
+          if (mine && Array.isArray(mine.orders)) keepToken = res.access_token;
+        } catch {
+          // A convenience, never a reason to sour a placed order. Without it
+          // the customer simply keeps the order-scoped link they already have.
+        }
+      }
+
       // Saved only once an order has actually succeeded, and from the values
       // the server accepted rather than from whatever is in the boxes.
-      saveRemembered({ name: res.name ?? name.trim(), phone, areaId, flat: res.flat ?? flat.trim() });
+      saveRemembered({
+        name: res.name ?? name.trim(),
+        phone,
+        areaId,
+        flat: res.flat ?? flat.trim(),
+        ...(keepToken ? { accountToken: keepToken } : {}),
+      });
 
       // The confirmation is a real page now, not a piece of state. push, not
       // replace, so Back from the confirmation returns to a fresh order form
@@ -424,11 +483,21 @@ export default function OrderFlow({ info, loadError }) {
             <h2 id="step-details">Where should we deliver?</h2>
           </div>
 
-          {/* Families share a phone and a laptop, so the way out has to be on
-              screen rather than buried in browser settings. */}
           {remembered && (
             <p className="remembered">
               These are the details you used last time.{" "}
+              {/* Only when this device holds the account link. An internal
+                  link to our own private page is the one place that token is
+                  allowed to appear — never in a message, never outbound. */}
+              {accountToken && (
+                <>
+                  <Link className="yourorders" href={`/my/${accountToken}`}>
+                    See your orders
+                  </Link>{" "}
+                </>
+              )}
+              {/* Families share a phone and a laptop, so the way out has to be
+                  on screen rather than buried in browser settings. */}
               <button type="button" className="notyou" onClick={notYou}>
                 Not you?
               </button>

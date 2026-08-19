@@ -293,6 +293,21 @@ plus a valid mixed-pack order — all passed before this was trusted.
   - The dashboard now also spells out what it left out ("N already preparing or
     later, not counted"), because a headline of 0 is otherwise
     indistinguishable from a day with no orders.
+- **2026-08-19 (third round) — the device now keeps the account link.** Until
+  this, only a customer's very first order ever returned an account-wide token;
+  every reorder returned an order-scoped one, so a regular customer accumulated
+  isolated single-order pages and no history. `navera.you.v1` now carries
+  `accountToken` alongside the details, written only after `get_my_orders`
+  confirms the returned token really is account-scoped, and never overwritten
+  by a later order-scoped one. `place_order`, `get_my_orders` and
+  `get_order_by_token` were **not** touched.
+  - Verified in a real browser (headless Chromium driving the actual order
+    form against a local build): 21 checks covering a first order on cleared
+    storage, a repeat order on the same browser, a repeat order on cleared
+    storage, "Not you?", and the token never reaching a WhatsApp message, an
+    outbound link or visible text. The `place_order` responses and every read
+    payload were captured from the live database as `anon` and replayed
+    byte-for-byte, SHA-256 verified against the database's own hash.
 - `.claude/launch.json` already carries a `navera-dev` config, so
   `preview_start` can run the dev server by that name. Note that `npm run
   build` and `next dev` share `.next/`: running a build while the dev server
@@ -527,10 +542,19 @@ jobs is what made it unpredictable.
   line down the whole column — that older version overshot the first and last
   dots and drifted whenever a step's text wrapped.
 - **The confirmation is `/my/<token>`, and it must stay a URL.** It is a server
-  component with no client state at all, which is the only thing that makes
-  "refresh it, bookmark it, come back next week" structurally true rather than
-  a promise the client has to keep. Do not move it back into React state, and
-  do not make it depend on localStorage.
+  component, which is the only thing that makes "refresh it, bookmark it, come
+  back next week" structurally true rather than a promise the client has to
+  keep. Do not move it back into React state, and do not make it depend on
+  localStorage.
+  - **One client component hangs off it, `AccountLink.js`, and the distinction
+    is the word *depend*.** Every fact the page states — the order, the packs,
+    the amount, the delivery day, the status, the reorder action — is rendered
+    on the server and is complete with JavaScript disabled. AccountLink only
+    finishes one sentence in the footer, and it has to run on the client
+    because what it needs (does *this device* hold an account link?) exists
+    nowhere else by design. A server that could answer that from an order
+    token would be the two-token rule undone. If anything else under this route
+    ever wants to be a client component, that is the test it has to pass.
   - The route sets `robots: noindex` and `referrer: no-referrer` in its
     metadata, and every outbound link carries `rel="noopener noreferrer"`.
     **Both are load-bearing, not boilerplate.** The token is a credential
@@ -560,7 +584,8 @@ jobs is what made it unpredictable.
     page actually does.
 - **The customer's details are remembered in `localStorage` under
   `navera.you.v1`, and that is the only place they may ever come from.**
-  Name, phone, community and flat, written after a successful order.
+  Name, phone, community and flat, written after a successful order — plus,
+  since 2026-08-19, `accountToken`.
   **Never add a server-side lookup by phone number to the customer page.**
   Typing ten digits must never return someone's stored address — that would
   hand a neighbour's name and flat to anyone willing to guess, which is the
@@ -575,8 +600,41 @@ jobs is what made it unpredictable.
   - The community is only restored if it is **still in `info.areas`**, or a
     retired area sits in the select as a stale id that fails at the very last
     step with nothing on screen explaining why.
+  - **`accountToken` is a credential living in that same record, and it is the
+    device's answer to the two-token rule.** `place_order` issues an
+    account-wide link once, to whoever places the first order on a phone
+    number, and deliberately never re-issues it; every repeat order gets an
+    order-scoped token. Without somewhere to keep the first one, a customer who
+    reorders four times ends up holding four isolated single-order pages and no
+    history at all, which guts Order Again (§14) — the highest-value feature on
+    the list. So the browser keeps it. **Nothing on the server changed, and
+    nothing may: a phone number still buys nobody an account link.**
+    - **It is stored only after the server has confirmed what it is.**
+      `place_order` returns `access_token` without saying which kind, and the
+      two are indistinguishable on sight — both 48 hex characters. Only an
+      account token resolves through `get_my_orders`, so the order page asks
+      exactly that, once, on the order that first earns a device a link. **If a
+      token is already stored, that call is skipped entirely and the stored one
+      is kept** — a returning customer's order-scoped token must never
+      overwrite an account link. Storing it unverified would mislabel an order
+      token as a history link, which is worse than not offering one.
+    - **Where it may appear: as the href of an internal link to `/my/<token>`,
+      and nowhere else.** Never in a WhatsApp message, never in an outbound
+      href, never in a query parameter — all three get forwarded, pasted and
+      logged. The route's `referrer: no-referrer` covers the rest.
+    - A device that has only ever placed repeat orders (storage cleared, or a
+      second phone) simply never stores one, and its confirmation says so
+      honestly rather than pretending. That is correct, not a gap: the account
+      link is not recoverable from a form, by design.
+    - The footer on an order-scoped page used to tell the customer to find the
+      link from their first order. Most will not have kept it, so that sentence
+      is gone; when the device holds the account link the page links straight
+      to it, and when it does not it offers WhatsApp instead of a scavenger
+      hunt.
   - **"Not you?" is required, not a nicety.** Families share a phone and a
-    laptop. It clears the four fields and the stored record.
+    laptop. It clears the four fields, the stored record and the account token
+    with it — a shared laptop must not leave one person's whole order history
+    one tap away from the next person to use it.
 - **The summary is also the review step.** Packs, delivery day and address each
   carry a Change control that scrolls to its step and focuses it (the sections
   are `tabIndex={-1}` for exactly this). That is what "move back a step before

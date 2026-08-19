@@ -787,6 +787,19 @@ button, input, select { font: inherit; color: inherit; }
   font-size: 13.5px;
   color: var(--muted);
 }
+/* Both of these are links sitting inline in a sentence, so they take the
+   .notlisted treatment: inline-flex with a real 44px target, rather than a
+   16px word that only a stylus could hit. */
+.my-allorders,
+.yourorders {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 13px;
+  color: var(--green-soft);
+  text-decoration: underline;
+}
+.my-allorders { font-size: 13.5px; }
 
 .my-actions { margin-top: 26px; }
 /* The Order again control is a link, not a button — it navigates, so it has to
