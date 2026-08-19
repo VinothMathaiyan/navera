@@ -757,6 +757,37 @@ button, input, select { font: inherit; color: inherit; }
   color: var(--muted);
 }
 
+/* The card the page leads with — the same .card shell the confirmation always
+   used, with a strip across the top naming what it is and where it has got to.
+   Status is one of the things a customer opens this link to check, so it reads
+   at the top rather than only on a row further down a list. */
+.my-lead-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 13px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--line);
+}
+.my-lead-label {
+  font-size: 11.5px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--mustard-dk);
+}
+
+/* What an order-scoped link says where an account link lists the rest. Both
+   sit in the same slot, under the reorder action, so the two kinds of link
+   keep one shape and a returning customer never reads a thinner page. */
+.my-scope {
+  margin: 26px auto 0;
+  max-width: 40ch;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
 .my-actions { margin-top: 26px; }
 /* The Order again control is a link, not a button — it navigates, so it has to
    be one for middle-click, long-press and "open in new tab" to behave. */
