@@ -55,13 +55,16 @@ says "Fresh Paneer, Every Week" instead of subscription.
 min order, delivery charge — all admin-editable from `/admin` → Settings since
 2026-08-14, never hardcode these), `delivery_areas`,
 `products`, `customers` (phone is identity, `access_token` is the private
-"My Navera" link — no passwords, no OTP), `orders` (NAV-001 style reference),
+account-wide "My Navera" link — no passwords, no OTP), `orders` (NAV-001 style
+reference, plus its **own** `access_token` opening that one order, and
+`delivery_name` / `delivery_area_id` / `delivery_flat` holding what was typed
+for that order — all four added by the 2026-08-17 security fix),
 `order_items`, `subscriptions`, `subscription_skips`.
 
 **RLS is deny-by-default.** Public (anon) role has zero direct read access to
 customers, orders, order_items, subscriptions. It can only read `settings`,
 active `delivery_areas`, active `products`. All public reads of private data
-and all public writes go through three `SECURITY DEFINER` functions:
+and all public writes go through four `SECURITY DEFINER` functions:
 
 - `get_ordering_info()` — returns everything the order page needs: cutoff,
   delivery dates already computed server-side, areas, products, prices.
@@ -69,7 +72,9 @@ and all public writes go through three `SECURITY DEFINER` functions:
   recomputes the cutoff server-side (never trust a date from the browser),
   checks the area exists and is active, prices items from the `products`
   table (never from client input), creates/updates the customer by phone,
-  creates the order and items, returns the reference + access_token. Also
+  creates the order and items, returns the reference + a link token — **which
+  one depends on whether the customer is new, see the two-token rule below.**
+  Also
   takes optional `p_time_preference` / `p_address_note` (see the delivery-time
   rule below). Both are conveniences, so an unrecognised preference is coerced
   to null and the note is trimmed and capped at 200 chars, rather than
@@ -79,7 +84,7 @@ and all public writes go through three `SECURITY DEFINER` functions:
     otherwise the old overload lingers and a call becomes ambiguous. Grants
     are lost on drop, so re-`grant execute` to `anon`, `authenticated` and
     `service_role` afterwards (`PUBLIC` stays revoked).
-  - **`PUBLIC` really is revoked now, on all three functions** — the founder
+  - **`PUBLIC` really is revoked now, on all four functions** — the founder
     revoked it on `place_order` directly on 2026-08-16. Until then this note
     described the intent and `place_order` alone still carried the default
     `PUBLIC` grant it was created with. Not a hole (`anon` has the same
@@ -87,7 +92,8 @@ and all public writes go through three `SECURITY DEFINER` functions:
     knowing about because a **newly created function is granted to `PUBLIC` by
     default** — the `revoke` is a required step, not a tidy-up. Check with
     `has_function_privilege('public', oid, 'EXECUTE')`, which should be
-    `false` for all three while `anon` stays `true`.
+    `false` for all four while `anon` stays `true`. Re-checked 2026-08-19,
+    including `get_order_by_token`: `anon` true, `public` false on all four.
 - `get_my_orders(p_token)` — added 2026-08-16, the read behind `/my/<token>`
   (spec §15). Takes the customer's `access_token` and returns only that
   customer's own name, community, flat and last 20 orders with their items.
@@ -108,6 +114,42 @@ and all public writes go through three `SECURITY DEFINER` functions:
   - There is a cheap `length(p_token) between 24 and 128` guard before the
     lookup. It exists to stop a megabyte of text reaching the query, not as
     validation — it returns the same null as everything else.
+- `get_order_by_token(p_token)` — added by the founder's 2026-08-17 security
+  fix. Takes an **order's** `access_token` and returns that one order, in the
+  same payload shape `get_my_orders` uses plus a `'scope': 'order'` field, so
+  the page can say honestly that the link opens one order rather than a
+  history. Same null-for-everything rule, same length guard, and `is_blocked`
+  on the owning customer suppresses the whole payload. It never returns a
+  token, a phone or an id either.
+
+**The two-token rule — the single most load-bearing thing on this page.**
+Since 2026-08-17 there are two kinds of private link and they are not
+interchangeable:
+
+- **New customer** → `customers.access_token` → `get_my_orders` → the whole
+  account. Safe to hand out at that moment precisely because the order just
+  placed *is* the entire account: it exposes nothing the caller did not type.
+- **Returning customer** → `orders.access_token` → `get_order_by_token` → that
+  one order and nothing else. `place_order` deliberately does **not** re-issue
+  the account token to anyone who types a known phone number, because a phone
+  number on a public form is not proof of ownership. Recovering a lost account
+  link is a WhatsApp conversation, not something ten guessable digits buys.
+
+The same fix also stopped `place_order` overwriting the stored customer row
+from the form. What was typed is recorded against the order instead, on
+`orders.delivery_name` / `delivery_area_id` / `delivery_flat` — so an order
+placed on a neighbour's number can no longer redirect their next delivery.
+`get_order_by_token` reads those, falling back to the account's for older rows.
+
+**Anything reading a token must resolve both kinds**, because each function
+returns the same `null` for the other's token type as it does for a forgery.
+This was learned the hard way: `/my/<token>` called only `get_my_orders`, so
+every repeat customer's confirmation link — a perfectly valid one — landed on
+"This link didn't open" (reported as NAV-019, fixed 2026-08-19). The page now
+asks both, **in parallel rather than one after the other**: same two calls for
+a good token and a bad one, so response time cannot tell a guesser which kind
+of token they hit, and a returning customer's page is not a round trip slower
+than a first-timer's. Keep that shape if this is ever touched again.
 
 **Keep this pattern for every future public-facing feature** (Order Again,
 Change Tomorrow's Order, subscriptions, skip/pause): a narrow
@@ -213,6 +255,44 @@ plus a valid mixed-pack order — all passed before this was trusted.
     rendered byte-identical pages; `anon` still gets `42501` on orders,
     order_items, customers and subscriptions over real HTTP. Contrast and tap
     targets re-checked at 360 px on every new control.
+- **2026-08-19 — repeat customers could not open their own link.** Since the
+  2026-08-17 security fix `place_order` hands a returning customer an
+  order-scoped token, but `/my/<token>` still only called `get_my_orders`,
+  which answers `null` for one — indistinguishable from a forgery. Every repeat
+  customer's confirmation therefore landed on "This link didn't open"
+  (reported as NAV-019). The page now asks both functions in parallel and
+  renders from whichever answers, and leads with the order itself rather than
+  burying it under history. No schema change and no new grant: the fix was
+  entirely in the page, which is the right place for it — the database was
+  already correct.
+  - Verified against the live database as the `anon` role: a fresh order for a
+    new phone came back with an account token, one for the existing 9159786085
+    with an order token opening only NAV-022, and the full matrix of eight
+    tokens (both good ones, the account token, random, truncated, altered,
+    over-long, empty) resolved exactly as intended. Seven bad-token variants
+    rendered one identical page — same digest, same length — while the valid
+    ones did not. The order-scoped page for NAV-019 was checked to contain no
+    account token, no phone number and none of that customer's other ten order
+    references. Rotating a token was re-confirmed to close the link. Both test
+    orders were deleted afterwards so the milk forecast stays honest.
+- **2026-08-19 (second round) — the two production screens disagreed.** The
+  dashboard counted every live order; the production tab counted only
+  `confirmed`. With NAV-007 dispatched, the tab correctly showed nothing left
+  to make for Mon 17 Aug while the dashboard still asked for 10.2 litres. Same
+  day, same rows, two answers, and the wrong one was the headline a purchase is
+  made from. Fixed by moving the filter into `computeForecast` so there is one
+  rule rather than two call sites agreeing to differ, and by giving it a `milk`
+  field — whole litres, rounded up — that both screens render.
+  - Verified with 33 maths cases over the **real Mon 17 Aug rows** pulled from
+    the live database: dashboard and production now return an identical
+    `{orders, done, toMake, kg, milk, lemons}` both as the day stands
+    (1 order, 1 done, 0 to make, 0 L) and with NAV-007 as `confirmed`
+    (1.2 kg, 11 L, 11 lemons). The confirmed case was run as an in-memory
+    variant of those same rows — **no order's status was changed in the
+    database**, which is both the instruction and the safer test.
+  - The dashboard now also spells out what it left out ("N already preparing or
+    later, not counted"), because a headline of 0 is otherwise
+    indistinguishable from a day with no orders.
 - `.claude/launch.json` already carries a `navera-dev` config, so
   `preview_start` can run the dev server by that name. Note that `npm run
   build` and `next dev` share `.next/`: running a build while the dev server
@@ -382,6 +462,28 @@ jobs is what made it unpredictable.
   bought can be tested without rendering anything. `computeForecast(orders,
   settings)` takes the rows exactly as `ORDER_SELECT` returns them — note that
   PostgREST hands back numerics as **strings**, which is what the tests pin.
+- **The counting rule lives in this module and is applied by it**, which is the
+  whole point of the 2026-08-19 fix:
+
+  ```
+  still to make   = status 'confirmed'      → every headline figure
+  already handled = preparing | dispatched | delivered
+  excluded        = cancelled
+  ```
+
+  **Pass orders in raw — cancelled ones included — and never pre-filter at a
+  call site.** Both screens used to call `computeForecast`, so the arithmetic
+  could not drift; only the production tab filtered, so the *inputs* did, and
+  the dashboard asked Gowri to buy 10.2 litres for a batch already dispatched.
+  A shared function with an unshared filter is not a shared rule. `gross` is
+  returned alongside for anything that wants the whole live day, and a screen
+  showing it must label it — it is never the purchasing number.
+- **`milk` is the only milk figure a screen may render**: whole litres, always
+  rounded up. `litres` stays exact for the maths and for tests, and the two are
+  deliberately different fields — the dashboard used to print `litres` to one
+  decimal (10.2) beside a production tab printing 11 for the same evening, and
+  you cannot buy 0.2 of a litre. Lemons keep deriving from exact litres, so the
+  founder's measured batch still reads 8.5 L → 9 lemons.
 - Cancelled orders are excluded from every figure, as before.
 
 #### Production tab (`app/admin/Production.js`)
@@ -437,6 +539,17 @@ jobs is what made it unpredictable.
   - `?placed=NAV-00X` names which order the visit is about, so a refresh keeps
     showing that confirmation rather than a generic list. The token already
     grants everything the reference could reveal, so it adds no exposure.
+  - **It resolves both kinds of token** — see the two-token rule in the
+    Supabase section. Neither function may be dropped from that pair without
+    locking out half the customers.
+  - **It leads with the order, then the reorder action, then any history.**
+    Reference, delivery day, packs, amount and status in one card at the top,
+    for whichever kind of link opened the page: an order-scoped link must never
+    render a thinner page than an account one. Below the action, an account
+    link lists the rest and an order link says plainly that it opens that one
+    order — never an empty history, which reads as though something went
+    missing. The wording there claims nothing about whether other orders exist,
+    because the page genuinely cannot know and a guess would be its own leak.
   - **The token never goes into a WhatsApp message.** Same rule as before —
     those get forwarded. The page says "don't forward the link" for the same
     reason.

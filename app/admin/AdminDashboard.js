@@ -375,12 +375,16 @@ export default function AdminDashboard() {
             <span className="ad-fc-date">{date ? shortDate(date) : ""}</span>
           </div>
 
-          {/* Two shopping numbers, equal weight — this is what gets bought. */}
+          {/* Two shopping numbers, equal weight — this is what gets bought,
+              and it is STILL TO MAKE only. Anything already preparing,
+              dispatched or delivered has had its milk bought once already;
+              counting it again here told Gowri to buy it twice. Whole litres,
+              because the shop does not sell 0.2 of one. Both the filter and
+              the rounding come from computeForecast, which the production tab
+              reads too — the two screens cannot answer differently. */}
           <div className="ad-hero">
             <div className="ad-hero-fig">
-              <div className="ad-hero-n">
-                {forecast.litres.toLocaleString("en-IN", { maximumFractionDigits: 1 })}
-              </div>
+              <div className="ad-hero-n">{forecast.milk}</div>
               <div className="ad-hero-l">litres of milk</div>
             </div>
             <div className="ad-hero-fig">
@@ -392,27 +396,47 @@ export default function AdminDashboard() {
           </div>
           <div className="ad-hero-sub">
             {forecast.kg.toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg paneer
+            {" still to make"}
             {forecast.perKg > 0 && <> · {forecast.perKg} litres per kg</>}
-            {forecast.litres > 0 && <> · {forecast.perLitre} lemon per litre, rounded up</>}
+            {forecast.milk > 0 && <> · {forecast.perLitre} lemon per litre, rounded up</>}
           </div>
 
+          {/* Named for what they are. These are the packs left to make, not
+              every pack ordered for the day — the footer below carries that. */}
           <div className="ad-fc-grid">
             {forecast.bySize.length === 0 && (
-              <div className="ad-fc-empty">No packs ordered for this date yet.</div>
+              <div className="ad-fc-empty">
+                {forecast.doneCount > 0
+                  ? "Nothing left to make for this date."
+                  : "No packs ordered for this date yet."}
+              </div>
             )}
             {forecast.bySize.map(([grams, count]) => (
               <div className="ad-fc-cell" key={grams}>
                 <div className="n">{count}</div>
                 <div className="l">
-                  {grams}g pack{count === 1 ? "" : "s"}
+                  {grams}g pack{count === 1 ? "" : "s"} to make
                 </div>
               </div>
             ))}
           </div>
 
+          {/* The gross figures, spelled out rather than folded into the
+              headline. Without this line a zero above is indistinguishable
+              from a day with no orders at all. */}
           <div className="ad-fc-foot">
             {forecast.orderCount} order{forecast.orderCount === 1 ? "" : "s"} ·{" "}
-            {forecast.packs} pack{forecast.packs === 1 ? "" : "s"} total
+            {forecast.toMakeCount} still to make · {forecast.packs} pack
+            {forecast.packs === 1 ? "" : "s"} to make
+            {forecast.doneCount > 0 && (
+              <>
+                {" "}
+                · {forecast.doneCount} already preparing or later, not counted
+                {forecast.gross.milk > forecast.milk && (
+                  <> ({forecast.gross.milk} L for the whole day)</>
+                )}
+              </>
+            )}
             {forecast.cancelled > 0 && (
               <> · {forecast.cancelled} cancelled, not counted</>
             )}
