@@ -5,21 +5,22 @@
 // next to it is `Production.js`, and Windows filesystems are case-insensitive,
 // so those two would be the same file.
 //
-// THE COUNTING RULE, which everything else depends on:
-//   still to make   = status 'confirmed'
-//   already handled = 'preparing' | 'dispatched' | 'delivered'
-//   excluded        = 'cancelled'
-// Milk and lemons are computed from STILL TO MAKE only. A gross figure that
-// silently includes finished batches is worse than no figure, because it looks
-// authoritative while telling her to buy the same milk twice.
+// THE COUNTING RULE (still to make = 'confirmed') now lives in ./forecast.js,
+// next to the arithmetic it governs, and is applied there. This file used to
+// apply it here as well — which is precisely how the dashboard came to disagree
+// with this screen: both called computeForecast, so the maths could not drift,
+// but only one of them filtered, so the inputs did. Pass orders in raw.
 
 import { computeForecast } from "./forecast";
+
+// The status vocabulary is defined with the maths it governs and re-exported
+// here, so a component still has one import site for all of it.
+export { CANCELLED, isCancelled, isDone, isToMake } from "./forecast";
 
 // The order of orders.status, matching the CHECK constraint. 'cancelled' is
 // deliberately not in this list — it is a departure from the flow, not a step
 // along it, and is reached only through its own confirmed action.
 export const STATUS_FLOW = ["confirmed", "preparing", "dispatched", "delivered"];
-export const CANCELLED = "cancelled";
 
 export const STATUS_LABEL = {
   confirmed: "Confirmed",
@@ -28,11 +29,6 @@ export const STATUS_LABEL = {
   delivered: "Delivered",
   cancelled: "Cancelled",
 };
-
-export const isCancelled = (o) => o.status === CANCELLED;
-export const isToMake = (o) => o.status === "confirmed";
-export const isDone = (o) =>
-  o.status === "preparing" || o.status === "dispatched" || o.status === "delivered";
 
 export const nextStatus = (s) => {
   const i = STATUS_FLOW.indexOf(s);
@@ -86,25 +82,20 @@ export function nextDeliveryDates(deliveryDays, fromISO, count = 6) {
 /* ---------------------------------------------- one day */
 
 export function summariseDate(ordersForDate, settings) {
-  const all = ordersForDate ?? [];
-  const live = all.filter((o) => !isCancelled(o));
-  const toMake = live.filter(isToMake);
-  const done = live.filter(isDone);
-
-  // Same arithmetic as the single-date forecast on the dashboard — the two
-  // screens must never disagree about the same day, so there is one
-  // implementation and only the set of orders fed into it differs.
-  const f = computeForecast(toMake, settings);
+  // Raw orders in, including cancelled ones: computeForecast owns both the
+  // counting rule and the rounding, so this screen and the dashboard cannot
+  // hold different opinions about the same evening. Nothing here re-derives a
+  // figure it could read.
+  const f = computeForecast(ordersForDate, settings);
 
   return {
-    orders: live.length, // cancelled excluded from the headline count
-    done: done.length,
-    toMake: toMake.length,
-    cancelled: all.length - live.length,
+    orders: f.orderCount, // cancelled excluded from the headline count
+    done: f.doneCount,
+    toMake: f.toMakeCount,
+    cancelled: f.cancelled,
     kg: f.kg,
     litres: f.litres,
-    // Whole units: you cannot buy 7.65 litres or 8.2 lemons. Always up.
-    milk: Math.ceil(f.litres),
+    milk: f.milk,
     lemons: f.lemons,
     bySize: f.bySize,
   };

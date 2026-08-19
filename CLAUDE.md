@@ -275,6 +275,24 @@ plus a valid mixed-pack order — all passed before this was trusted.
     account token, no phone number and none of that customer's other ten order
     references. Rotating a token was re-confirmed to close the link. Both test
     orders were deleted afterwards so the milk forecast stays honest.
+- **2026-08-19 (second round) — the two production screens disagreed.** The
+  dashboard counted every live order; the production tab counted only
+  `confirmed`. With NAV-007 dispatched, the tab correctly showed nothing left
+  to make for Mon 17 Aug while the dashboard still asked for 10.2 litres. Same
+  day, same rows, two answers, and the wrong one was the headline a purchase is
+  made from. Fixed by moving the filter into `computeForecast` so there is one
+  rule rather than two call sites agreeing to differ, and by giving it a `milk`
+  field — whole litres, rounded up — that both screens render.
+  - Verified with 33 maths cases over the **real Mon 17 Aug rows** pulled from
+    the live database: dashboard and production now return an identical
+    `{orders, done, toMake, kg, milk, lemons}` both as the day stands
+    (1 order, 1 done, 0 to make, 0 L) and with NAV-007 as `confirmed`
+    (1.2 kg, 11 L, 11 lemons). The confirmed case was run as an in-memory
+    variant of those same rows — **no order's status was changed in the
+    database**, which is both the instruction and the safer test.
+  - The dashboard now also spells out what it left out ("N already preparing or
+    later, not counted"), because a headline of 0 is otherwise
+    indistinguishable from a day with no orders.
 - `.claude/launch.json` already carries a `navera-dev` config, so
   `preview_start` can run the dev server by that name. Note that `npm run
   build` and `next dev` share `.next/`: running a build while the dev server
@@ -444,6 +462,28 @@ jobs is what made it unpredictable.
   bought can be tested without rendering anything. `computeForecast(orders,
   settings)` takes the rows exactly as `ORDER_SELECT` returns them — note that
   PostgREST hands back numerics as **strings**, which is what the tests pin.
+- **The counting rule lives in this module and is applied by it**, which is the
+  whole point of the 2026-08-19 fix:
+
+  ```
+  still to make   = status 'confirmed'      → every headline figure
+  already handled = preparing | dispatched | delivered
+  excluded        = cancelled
+  ```
+
+  **Pass orders in raw — cancelled ones included — and never pre-filter at a
+  call site.** Both screens used to call `computeForecast`, so the arithmetic
+  could not drift; only the production tab filtered, so the *inputs* did, and
+  the dashboard asked Gowri to buy 10.2 litres for a batch already dispatched.
+  A shared function with an unshared filter is not a shared rule. `gross` is
+  returned alongside for anything that wants the whole live day, and a screen
+  showing it must label it — it is never the purchasing number.
+- **`milk` is the only milk figure a screen may render**: whole litres, always
+  rounded up. `litres` stays exact for the maths and for tests, and the two are
+  deliberately different fields — the dashboard used to print `litres` to one
+  decimal (10.2) beside a production tab printing 11 for the same evening, and
+  you cannot buy 0.2 of a litre. Lemons keep deriving from exact litres, so the
+  founder's measured batch still reads 8.5 L → 9 lemons.
 - Cancelled orders are excluded from every figure, as before.
 
 #### Production tab (`app/admin/Production.js`)
