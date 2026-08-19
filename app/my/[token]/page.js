@@ -67,6 +67,48 @@ export default async function MyNaveraPage({ params, searchParams }) {
     me = null;
   }
 
+  // A repeat customer's confirmation link carries the order's own token, not
+  // the account token — since the 17 Aug security fix these are two different
+  // token types, and get_my_orders only ever recognises the account one. Try
+  // the order-scoped lookup before giving up, same "swallow and treat as no
+  // link" handling as above so every failure still renders identically.
+  if (!me || !Array.isArray(me.orders) || me.orders.length === 0) {
+    let order = null;
+    try {
+      order = await rpc("get_order_by_token", { p_token: token });
+    } catch {
+      order = null;
+    }
+    if (order && order.scope === "order" && order.reference) {
+      // Reshaped into the same shape get_my_orders returns, with a single
+      // order in it, so every render path below — address card, "coming
+      // up"/"earlier" split, the just-placed confirmation, WhatsApp links —
+      // stays the one already built and verified, instead of a second
+      // parallel layout to keep in sync. An order-scoped token only ever
+      // yields this one order; nothing here can surface any other.
+      me = {
+        name: order.name ?? null,
+        community: order.community ?? null,
+        flat: order.flat ?? null,
+        whatsapp_number: order.whatsapp_number ?? null,
+        cutoff_time: order.cutoff_time ?? null,
+        // Falls back to a date before any real delivery date, so a missing
+        // `today` can never sort the order out of both the "coming up" and
+        // "earlier" lists and leave the page looking empty.
+        today: order.today ?? "0000-00-00",
+        orders: [
+          {
+            reference: order.reference,
+            delivery_date: order.delivery_date,
+            status: order.status,
+            total: order.total,
+            items: order.items ?? [],
+          },
+        ],
+      };
+    }
+  }
+
   /* ---------------------------------------------- nothing to show */
 
   // One response for every failure: unknown token, truncated token, a character
