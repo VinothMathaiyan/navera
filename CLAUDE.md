@@ -619,6 +619,28 @@ jobs is what made it unpredictable.
 
 ### Customer page — decisions that are load-bearing, not taste
 
+- **The four text fields in "Where should we deliver?" carry floating labels**
+  (`.field.float`, added on the `claude/floating-labels-delivery-7l69cn`
+  branch). Three things about them are load-bearing rather than cosmetic:
+  - **The box is padded for the floated state from the start** (21px top / 6px
+    bottom, never changing). That is the whole reason nothing jumps when a label
+    travels — only the label moves, and the box is 53px in every state.
+  - **Every one of those inputs carries a `placeholder`, including "Your name",
+    which has no hint to give — its placeholder is a single space.**
+    `:placeholder-shown` is what tells the label the field is empty, and it
+    matches nothing at all when the attribute is absent, which would leave that
+    label floated for ever. Do not "tidy away" the space.
+  - **The input comes before the label in the DOM**, because CSS has no
+    previous-sibling combinator and the label is reached as `input + label`.
+    `htmlFor` still does the associating, so the accessible name, autofill and
+    tapping the label are all unchanged — verified, along with tab order.
+  - The label may wrap at rest and may not be truncated: "Anything to help us
+    find you? (optional)" needs 317px and a 360px phone has 304, so it takes two
+    centred lines there. Floated it is one line at 12px (238px) at any width.
+  - **`.field` on its own is untouched, and /admin still uses it.** This is not
+    a site-wide change to what a form field looks like.
+  - The Community `<select>` deliberately keeps its label above the box, because
+    `:placeholder-shown` does not apply to a select.
 - **One selected look for every choice.** Packs, delivery days and time bands
   all share `[aria-pressed="true"]` → filled `--green`, white text, plus a
   tick (`.chosen` badge on packs and dates, a `::before` tick on the pills).
