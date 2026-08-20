@@ -10,8 +10,8 @@
 //
 // THE COUNTING RULE lives here, and here only:
 //
-//   still to make   = status 'confirmed'
-//   already handled = 'preparing' | 'dispatched' | 'delivered'
+//   still to make   = status 'confirmed' | 'preparing'
+//   already handled = 'dispatched' | 'delivered'
 //   excluded        = 'cancelled'
 //
 // Milk, lemons, paneer and pack counts are computed from STILL TO MAKE alone.
@@ -19,6 +19,14 @@
 // because it looks authoritative while telling Gowri to buy the same milk
 // twice — which is exactly what the dashboard did until 2026-08-19, when it
 // asked for 10.2 litres for a batch that had already been dispatched.
+//
+// 'preparing' counts as still to make (founder's rule, 2026-08-20): the
+// forecast answers "what has yet to be MADE", and a batch that is being made
+// has not been made yet. Note the tension this leaves, which is a business
+// question rather than a bug: milk is bought before Start is pressed, so
+// while an evening's batch sits in 'preparing' the milk figure asks for
+// litres that are already in the fridge. Moving 'preparing' back to isDone is
+// the whole of the change if that turns out to be the wrong trade.
 //
 // The rule sits in this module rather than in each screen because it used to
 // sit in neither: the production tab filtered, the dashboard did not, and both
@@ -33,9 +41,17 @@ export const DEFAULT_LEMONS_PER_LITRE = 1;
 export const CANCELLED = "cancelled";
 
 export const isCancelled = (o) => o.status === CANCELLED;
-export const isToMake = (o) => o.status === "confirmed";
-export const isDone = (o) =>
-  o.status === "preparing" || o.status === "dispatched" || o.status === "delivered";
+export const isToMake = (o) => o.status === "confirmed" || o.status === "preparing";
+export const isDone = (o) => o.status === "dispatched" || o.status === "delivered";
+
+// Not the same question as isToMake, and the difference is load-bearing.
+// isToMake asks "is there paneer still to make for this?" — 'preparing' says
+// yes. This asks "has the batch been started?", which is what the Production
+// tab's Start action can actually change: it PATCHes status=eq.confirmed, so a
+// day whose orders are all 'preparing' has nothing left for it to do. Driving
+// the button off isToMake would put a Start on a row where tapping it is a
+// no-op, and a button that does nothing is worse than no button.
+export const isNotStarted = (o) => o.status === "confirmed";
 
 // The arithmetic for one set of orders. Private: callers get it through
 // computeForecast, which decides which orders belong in the set.
@@ -90,6 +106,7 @@ export function computeForecast(orders, settings) {
   const live = all.filter((o) => !isCancelled(o));
   const toMake = live.filter(isToMake);
   const done = live.filter(isDone);
+  const notStarted = live.filter(isNotStarted);
 
   return {
     // The headline figures — still to make, i.e. what has yet to be bought for.
@@ -102,6 +119,8 @@ export function computeForecast(orders, settings) {
     orderCount: live.length, // cancelled excluded, as the counts always were
     toMakeCount: toMake.length,
     doneCount: done.length,
+    // Orders the Start action would actually move. A subset of toMake.
+    notStartedCount: notStarted.length,
     cancelled: all.length - live.length,
   };
 }

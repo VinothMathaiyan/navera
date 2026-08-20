@@ -308,6 +308,21 @@ plus a valid mixed-pack order — all passed before this was trusted.
     outbound link or visible text. The `place_order` responses and every read
     payload were captured from the live database as `anon` and replayed
     byte-for-byte, SHA-256 verified against the database's own hash.
+- **2026-08-20 — `preparing` now counts as still to make.** A founder rule
+  change, not a bug fix: the forecast answers what has yet to be made, so
+  `confirmed` and `preparing` are counted and only `dispatched` / `delivered` /
+  `cancelled` are left out. The concern that milk is bought before Start is
+  pressed — so the headline can ask for litres already in the fridge — was
+  raised before the change and the rule was confirmed.
+  - The knock-on: the Start button had been driven by `toMake`, which now
+    includes `preparing`, so it would have appeared on days where tapping it
+    does nothing. It reads `notStarted` instead.
+  - Verified in a real browser against the live rows, both screens read off the
+    rendered page: Sat 22 Aug (NAV-001, preparing, 1.6 kg) → dashboard 14 L /
+    14 lemons, production row 14 L / 14. Sun 23 Aug (a throwaway dispatched
+    order, 1 kg) → 0 on both. The same two rows through the previous release's
+    modules gave dashboard 13.6 L vs production 0, and 8.5 L vs 0 — the
+    disagreement being fixed. 36 maths cases pass. The test order was deleted.
 - `.claude/launch.json` already carries a `navera-dev` config, so
   `preview_start` can run the dev server by that name. Note that `npm run
   build` and `next dev` share `.next/`: running a build while the dev server
@@ -481,10 +496,25 @@ jobs is what made it unpredictable.
   whole point of the 2026-08-19 fix:
 
   ```
-  still to make   = status 'confirmed'      → every headline figure
-  already handled = preparing | dispatched | delivered
+  still to make   = status 'confirmed' | 'preparing'   → every headline figure
+  already handled = dispatched | delivered
   excluded        = cancelled
   ```
+
+  **`preparing` moved into "still to make" on 2026-08-20**, by founder decision:
+  the forecast answers what has yet to be *made*, and a batch being made has
+  not been made yet. Worth knowing that this leaves a real tension rather than
+  resolving one — milk is bought *before* Start is pressed, so while an
+  evening's batch sits in `preparing` the milk headline asks for litres already
+  in the fridge. It was raised at the time and the rule was confirmed anyway.
+  Moving `preparing` back into `isDone` is the whole of the reversal.
+- **`isNotStarted` is not `isToMake`, and the difference is load-bearing.**
+  `isToMake` asks "is there paneer still to make?" — `preparing` says yes.
+  `isNotStarted` asks "has the batch been started?", which is what the
+  production tab's Start action can change: it PATCHes `status=eq.confirmed`,
+  so a day whose orders are all `preparing` has nothing for it to do. The Start
+  button is driven by `notStartedCount`, never by `toMakeCount`, or it appears
+  on rows where tapping it is a no-op.
 
   **Pass orders in raw — cancelled ones included — and never pre-filter at a
   call site.** Both screens used to call `computeForecast`, so the arithmetic
@@ -504,7 +534,9 @@ jobs is what made it unpredictable.
 #### Production tab (`app/admin/Production.js`)
 
 - **The "Start" batch action lives in each table row**, as a small button in a
-  final unlabelled column, and only on rows where `toMake > 0`. Rows with
+  final unlabelled column, and only on rows where `notStarted > 0` (orders
+  still `confirmed` — see the counting rule above; `toMake` now includes
+  `preparing`, which Start cannot move). Rows with
   nothing left to make show a dash — a Start button that would do nothing is
   worse than no button.
   - It replaced six stacked full-width blocks below the table (2026-08-16).

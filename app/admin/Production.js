@@ -125,7 +125,7 @@ export default function Production({ orders, settings, dates, today, onChanged, 
                     Only on rows with something left to make — a Start on a
                     finished or empty day is a button that does nothing. */}
                 <td className="act">
-                  {r.toMake > 0 ? (
+                  {r.notStarted > 0 ? (
                     <button
                       type="button"
                       className="ad-row-start"
@@ -133,8 +133,8 @@ export default function Production({ orders, settings, dates, today, onChanged, 
                       // "Start" alone is ambiguous once it is out of a
                       // full-width block, so the accessible name carries the
                       // date and the count the visible column already shows.
-                      aria-label={`Start ${short(r.date)} — ${r.toMake} order${
-                        r.toMake === 1 ? "" : "s"
+                      aria-label={`Start ${short(r.date)} — ${r.notStarted} order${
+                        r.notStarted === 1 ? "" : "s"
                       }`}
                       onClick={() => markPreparing(r.date)}
                     >
@@ -171,9 +171,11 @@ export default function Production({ orders, settings, dates, today, onChanged, 
 
       <p className="ad-note">
         Paneer, milk and lemons count the <strong>still to make</strong> orders
-        only — anything already preparing, dispatched or delivered is left out,
-        and cancelled orders are excluded entirely. <strong>Start</strong> marks
-        that whole evening&apos;s batch as preparing.
+        — confirmed and preparing, because a batch being made has not been made
+        yet. Anything already dispatched or delivered is left out, and cancelled
+        orders are excluded entirely. <strong>Start</strong> marks that whole
+        evening&apos;s batch as preparing, so it moves orders within
+        &ldquo;still to make&rdquo; rather than out of it.
       </p>
 
       {lastBulk && (
