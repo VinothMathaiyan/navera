@@ -308,21 +308,24 @@ plus a valid mixed-pack order — all passed before this was trusted.
     outbound link or visible text. The `place_order` responses and every read
     payload were captured from the live database as `anon` and replayed
     byte-for-byte, SHA-256 verified against the database's own hash.
-- **2026-08-20 — `preparing` now counts as still to make.** A founder rule
-  change, not a bug fix: the forecast answers what has yet to be made, so
-  `confirmed` and `preparing` are counted and only `dispatched` / `delivered` /
-  `cancelled` are left out. The concern that milk is bought before Start is
-  pressed — so the headline can ask for litres already in the fridge — was
-  raised before the change and the rule was confirmed.
-  - The knock-on: the Start button had been driven by `toMake`, which now
-    includes `preparing`, so it would have appeared on days where tapping it
-    does nothing. It reads `notStarted` instead.
-  - Verified in a real browser against the live rows, both screens read off the
-    rendered page: Sat 22 Aug (NAV-001, preparing, 1.6 kg) → dashboard 14 L /
-    14 lemons, production row 14 L / 14. Sun 23 Aug (a throwaway dispatched
-    order, 1 kg) → 0 on both. The same two rows through the previous release's
-    modules gave dashboard 13.6 L vs production 0, and 8.5 L vs 0 — the
-    disagreement being fixed. 36 maths cases pass. The test order was deleted.
+- **2026-08-20 — `preparing` briefly counted as still to make, then did not.**
+  The rule was changed to count `confirmed` + `preparing` and reverted the same
+  day by the founder, who identified the double-count: milk is bought before
+  Start is pressed, so a `preparing` batch has already been paid for and
+  counting it asks Gowri to buy the same litres twice. The counting rule is
+  back to `confirmed` only. Recorded because the same argument will recur.
+  - Kept from the reverted change, because both are improvements in their own
+    right: `computeForecast` returns `notStartedCount`, and the production
+    tab's Start button reads it rather than `toMakeCount`. Under the restored
+    rule the two are the same set — see the note in the forecast section.
+  - Verified in a real browser against live rows, both screens read off the
+    rendered page. With the rule counting preparing: Sat 22 Aug (NAV-001,
+    preparing, 1.6 kg) showed 14 L on dashboard and production alike, and a
+    throwaway dispatched order on Sun 23 Aug showed 0 on both — the dispatched
+    exclusion and the shared function verified in the same pass. The same rows
+    through the pre-`e38020d` modules gave dashboard 13.6 L vs production 0,
+    and 8.5 L vs 0, which is the disagreement that was fixed. 37 maths cases
+    pass under the restored rule. The test order was deleted.
 - `.claude/launch.json` already carries a `navera-dev` config, so
   `preview_start` can run the dev server by that name. Note that `npm run
   build` and `next dev` share `.next/`: running a build while the dev server
@@ -496,25 +499,31 @@ jobs is what made it unpredictable.
   whole point of the 2026-08-19 fix:
 
   ```
-  still to make   = status 'confirmed' | 'preparing'   → every headline figure
-  already handled = dispatched | delivered
+  still to make   = status 'confirmed'      → every headline figure
+  already handled = preparing | dispatched | delivered
   excluded        = cancelled
   ```
 
-  **`preparing` moved into "still to make" on 2026-08-20**, by founder decision:
-  the forecast answers what has yet to be *made*, and a batch being made has
-  not been made yet. Worth knowing that this leaves a real tension rather than
-  resolving one — milk is bought *before* Start is pressed, so while an
-  evening's batch sits in `preparing` the milk headline asks for litres already
-  in the fridge. It was raised at the time and the rule was confirmed anyway.
-  Moving `preparing` back into `isDone` is the whole of the reversal.
-- **`isNotStarted` is not `isToMake`, and the difference is load-bearing.**
-  `isToMake` asks "is there paneer still to make?" — `preparing` says yes.
-  `isNotStarted` asks "has the batch been started?", which is what the
-  production tab's Start action can change: it PATCHes `status=eq.confirmed`,
-  so a day whose orders are all `preparing` has nothing for it to do. The Start
-  button is driven by `notStartedCount`, never by `toMakeCount`, or it appears
-  on rows where tapping it is a no-op.
+  **`preparing` counts as already handled, and the reason is purchasing rather
+  than production.** Gowri buys the milk and *then* presses Start, so an order
+  in `preparing` has had its milk bought. Counting it would tell her to buy the
+  same litres twice — the identical double-count this rule removes at
+  `dispatched`, one status earlier. These screens carry a shopping number, so
+  it follows the money, not the paneer. This was briefly reversed on
+  2026-08-20 and reverted the same day; if it is proposed again, settle first
+  whether the headline means "milk to buy" or "paneer still to make", because
+  those differ the moment a batch is underway and the label says milk.
+- **`isNotStarted` asks a different question from `isToMake` and currently
+  selects the same orders.** `isToMake` is "is there milk still to buy for
+  this?"; `isNotStarted` is "can Start still move this row?" — Start PATCHes
+  `status=eq.confirmed`, so a day whose orders are all `preparing` has nothing
+  for it to do. Under today's rule both reduce to `status === 'confirmed'`, so
+  **the two counts are identical** — a property of the current rule, not an
+  invariant, and the rule moved `preparing` between them twice on 2026-08-20.
+  They are kept apart so that flip stays a one-line edit rather than a hunt for
+  which call site meant which question, and a test pins the equality so nobody
+  has to rediscover it. Collapsing them is a legitimate call if the duplication
+  ever reads as an accident.
 
   **Pass orders in raw — cancelled ones included — and never pre-filter at a
   call site.** Both screens used to call `computeForecast`, so the arithmetic

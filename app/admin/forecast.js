@@ -10,8 +10,8 @@
 //
 // THE COUNTING RULE lives here, and here only:
 //
-//   still to make   = status 'confirmed' | 'preparing'
-//   already handled = 'dispatched' | 'delivered'
+//   still to make   = status 'confirmed'
+//   already handled = 'preparing' | 'dispatched' | 'delivered'
 //   excluded        = 'cancelled'
 //
 // Milk, lemons, paneer and pack counts are computed from STILL TO MAKE alone.
@@ -20,13 +20,17 @@
 // twice — which is exactly what the dashboard did until 2026-08-19, when it
 // asked for 10.2 litres for a batch that had already been dispatched.
 //
-// 'preparing' counts as still to make (founder's rule, 2026-08-20): the
-// forecast answers "what has yet to be MADE", and a batch that is being made
-// has not been made yet. Note the tension this leaves, which is a business
-// question rather than a bug: milk is bought before Start is pressed, so
-// while an evening's batch sits in 'preparing' the milk figure asks for
-// litres that are already in the fridge. Moving 'preparing' back to isDone is
-// the whole of the change if that turns out to be the wrong trade.
+// 'preparing' counts as ALREADY HANDLED, and the reason is purchasing rather
+// than production. Gowri buys the milk and then presses Start, so an order in
+// 'preparing' has had its milk bought already. Counting it would tell her to
+// buy the same litres twice — the identical double-count this rule removes at
+// 'dispatched', one status earlier. The figure these screens carry is a
+// shopping number, so it follows the money, not the paneer.
+//
+// This was briefly reversed on 2026-08-20 and reverted the same day. If it is
+// ever proposed again, the question to settle first is whether the headline
+// means "milk to buy" or "paneer still to make"; those are different numbers
+// the moment a batch is underway, and the label on the dashboard says milk.
 //
 // The rule sits in this module rather than in each screen because it used to
 // sit in neither: the production tab filtered, the dashboard did not, and both
@@ -41,16 +45,24 @@ export const DEFAULT_LEMONS_PER_LITRE = 1;
 export const CANCELLED = "cancelled";
 
 export const isCancelled = (o) => o.status === CANCELLED;
-export const isToMake = (o) => o.status === "confirmed" || o.status === "preparing";
-export const isDone = (o) => o.status === "dispatched" || o.status === "delivered";
+export const isToMake = (o) => o.status === "confirmed";
+export const isDone = (o) =>
+  o.status === "preparing" || o.status === "dispatched" || o.status === "delivered";
 
-// Not the same question as isToMake, and the difference is load-bearing.
-// isToMake asks "is there paneer still to make for this?" — 'preparing' says
-// yes. This asks "has the batch been started?", which is what the Production
-// tab's Start action can actually change: it PATCHes status=eq.confirmed, so a
-// day whose orders are all 'preparing' has nothing left for it to do. Driving
-// the button off isToMake would put a Start on a row where tapping it is a
-// no-op, and a button that does nothing is worse than no button.
+// A different QUESTION from isToMake that currently selects the same ORDERS.
+//
+// isToMake asks "is there milk still to buy for this?"; this asks "can Start
+// still move this row?" — Start PATCHes status=eq.confirmed, so a day whose
+// orders are all 'preparing' has nothing left for it to do, and a button that
+// does nothing is worse than no button.
+//
+// Under today's rule both come out as status === 'confirmed', so the two sets
+// are identical. That is a property of the current rule, not an invariant:
+// the rule moved 'preparing' between them twice on 2026-08-20 alone, and the
+// moment it moves again these diverge. Kept separate so that change stays a
+// one-line edit here rather than a hunt for which call sites meant which
+// question — but they are the same set today, and collapsing them is a
+// legitimate call if the duplication ever reads as an accident.
 export const isNotStarted = (o) => o.status === "confirmed";
 
 // The arithmetic for one set of orders. Private: callers get it through

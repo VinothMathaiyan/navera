@@ -171,11 +171,10 @@ export default function Production({ orders, settings, dates, today, onChanged, 
 
       <p className="ad-note">
         Paneer, milk and lemons count the <strong>still to make</strong> orders
-        — confirmed and preparing, because a batch being made has not been made
-        yet. Anything already dispatched or delivered is left out, and cancelled
-        orders are excluded entirely. <strong>Start</strong> marks that whole
-        evening&apos;s batch as preparing, so it moves orders within
-        &ldquo;still to make&rdquo; rather than out of it.
+        only — anything already preparing, dispatched or delivered has had its
+        milk bought, and cancelled orders are excluded entirely.{" "}
+        <strong>Start</strong> marks that whole evening&apos;s batch as
+        preparing, which takes it out of these figures.
       </p>
 
       {lastBulk && (
