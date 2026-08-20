@@ -598,26 +598,42 @@ button, input, select { font: inherit; color: inherit; }
 .thread .why { font-size: 14px; color: var(--muted); margin: 0 0 17px; }
 
 .moments {
-  --dot: 15px;    /* dot diameter */
-  --gut: 29px;    /* dot column + gap */
+  --dot: 24px;    /* numbered circle diameter */
+  --gut: 36px;    /* circle column + gap */
   --lw: 2px;      /* connector width */
-  --top: 3px;     /* dot offset, to sit on the first line of the label */
+  --top: -1px;    /* circle offset, centring it on the first line of the title */
   padding-left: var(--gut);
 }
-.moment { position: relative; padding-bottom: 20px; }
+.moment { position: relative; padding-bottom: 21px; }
 .moment:last-child { padding-bottom: 0; }
 
-.moment::before {
-  content: "";
+/* The step number, drawn rather than typed: a bordered round div with a real
+   digit in it. Deliberately NOT the Unicode circled digits (U+2460 ① …) — a
+   fair number of Android builds ship no font covering that block, so they
+   land as tofu, and a step marker is the last thing that can afford to. Real
+   text in a CSS circle renders anywhere a digit does.
+
+   It is left readable by a screen reader rather than aria-hidden, matching
+   the .step-num digits in the form above: the numbering is the content here,
+   not decoration on top of it. */
+.mnum {
   position: absolute;
   left: calc(-1 * var(--gut));
   top: var(--top);
   width: var(--dot); height: var(--dot);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 50%;
   background: var(--cream);
-  border: 2.5px solid var(--green-soft);
+  border: 2px solid var(--green-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
 }
-/* Starts at the bottom of this dot, ends at the top of the next one. */
+/* Starts at the bottom of this circle, ends at the top of the next one. */
 .moment::after {
   content: "";
   position: absolute;
@@ -628,14 +644,27 @@ button, input, select { font: inherit; color: inherit; }
   background: var(--sage);
 }
 .moment:last-child::after { content: none; }
-.moment:last-child::before { border-color: var(--mustard-dk); background: var(--mustard); }
+/* Arrival: the last circle is filled, as the last dot was. Cocoa on mustard
+   rather than green, which is 4.4:1 at this size. */
+.moment:last-child .mnum {
+  border-color: var(--mustard-dk);
+  background: var(--mustard);
+  color: var(--cocoa);
+}
 
+/* Sentence case in the heading green, not small gold capitals. The old
+   treatment made a label of something that is really a title, and gold on
+   cream is the page's tightest contrast pair — it only cleared AA at all
+   after --mustard-dk was darkened for it. */
 .moment .when {
-  font-size: 11.5px;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--mustard-dk);
-  font-weight: 600;
+  font-family: var(--font-display);
+  /* A shade larger than the 15px description under it. At 16px the body-font
+     description out-weighed its own title, which put the hierarchy upside
+     down; this is the smallest size that reads as the heading of the pair. */
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--green);
 }
 .moment .what { font-size: 15px; margin-top: 2px; }
 

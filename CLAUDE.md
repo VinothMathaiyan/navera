@@ -184,9 +184,12 @@ plus a valid mixed-pack order — all passed before this was trusted.
 - **Day 2:** the order page (`app/page.js` → `app/OrderFlow.js`). Pack
   selection, date picker (cutoff-aware), delivery details, order summary,
   submission, confirmation screen, WhatsApp deep links (customer help +
-  post-order). Includes a 5-step "why tomorrow" timeline matching the
-  existing print banner's sequence (You order → We procure fresh milk → We
-  prepare fresh paneer → Carefully packed → Delivered fresh).
+  post-order). Includes a 5-step timeline under "What happens after you
+  order?" — the print banner's *sequence*, in the site's own words since
+  2026-08-20 (You order → We bring in the milk → We make the paneer → We
+  pack it → We deliver it). The order of the five steps is the thing that
+  matches the banner; the wording no longer does, and that was the founder's
+  call, so do not "restore" the banner's labels here.
 - Design tokens in `app/globals.css` are derived from the existing Navera
   banner (deep green, cream, mustard, cocoa) for visual consistency across
   print and web. Fonts: Fraunces (display) + Instrument Sans (body), loaded
@@ -615,11 +618,26 @@ jobs is what made it unpredictable.
   cut off by the screen edge is the only cue that the row scrolls. A fixed
   card width landed at 98% of a card on a 414 px phone, which reads as a
   rendering glitch rather than an invitation to swipe.
-- **The timeline dot and its connector both derive from `--dot` / `--gut` /
+- **The timeline marker and its connector both derive from `--dot` / `--gut` /
   `--lw` / `--top` on `.moments`.** The connector is per-step (`.moment::after`,
-  suppressed on the last), running dot-bottom to next-dot-top, rather than one
-  line down the whole column — that older version overshot the first and last
-  dots and drifted whenever a step's text wrapped.
+  suppressed on the last), running marker-bottom to next-marker-top, rather
+  than one line down the whole column — that older version overshot the first
+  and last dots and drifted whenever a step's text wrapped. Because everything
+  is expressed in those four variables, growing the empty 15px dot into the
+  24px numbered circle (2026-08-20) was a change of variables, not of geometry.
+- **The step numbers are real digits in a CSS-drawn circle (`.mnum`), and that
+  is the point — never the Unicode circled digits ① ② ③.** U+2460 is absent
+  from the default font stack on a good number of Android builds, where it
+  renders as tofu; a step marker is the one element that cannot degrade to a
+  box. `--top` centres the circle on the first line of the title, so it is
+  derived from the title's size and line-height (17px × 1.3 → `-1px`) and has
+  to be re-derived if either changes.
+- **Step titles are sentence case, display font at weight 500, in `--green`.**
+  They used to be 11.5px gold capitals, which made a label of something that
+  is really a title and sat at 4.88:1 — the page's tightest pair. They are now
+  11.07:1. The title is also a shade larger than the description under it
+  (17px vs 15px); at 16px the body-font description out-weighed its own title
+  and the pair read upside down.
 - **The confirmation is `/my/<token>`, and it must stay a URL.** It is a server
   component, which is the only thing that makes "refresh it, bookmark it, come
   back next week" structurally true rather than a promise the client has to
