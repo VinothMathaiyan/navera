@@ -437,13 +437,19 @@ button, input, select { font: inherit; color: inherit; }
 
 .field.float { position: relative; }
 
-.field.float input {
+.field.float input,
+.field.float select {
   /* 21 above / 6 below rather than 13 / 13: the top padding is the room the
      floated label lives in, and it is reserved whether or not the label is up
      there yet. 21 + 24 line + 6 + 3 border = 54px, comfortably over the 44px
      tap-target floor the rest of the page holds to. */
   padding: 21px 12px 6px;
   line-height: 24px;
+  /* The padding alone gives an <input> 53px and a <select> 50px — a select's
+     content box does not take the line-height. Three pixels is enough to read
+     as a misaligned box in a column of five, so the floor is stated once and
+     both obey it. */
+  min-height: 53px;
 }
 
 /* Resting: inside the box, vertically centred, at the size of the text that
@@ -454,20 +460,18 @@ button, input, select { font: inherit; color: inherit; }
   top: 50%;
   transform: translateY(-50%);
   margin: 0;
-  /* Only the left inset is subtracted, plus the border. The box holds nothing
-     else while the label is resting, so the right inset buys nothing — and
-     "Anything to help us find you? (optional)" needs 317px of the 339 a 375px
-     screen gives it. Matching the input's 12px on both sides truncated it. */
-  max-width: calc(100% - 20px);
+  /* The input's own 12px inset on both sides, plus the borders. */
+  max-width: calc(100% - 27px);
   font-size: 16px;
   line-height: 1.2;
   color: var(--muted);
-  /* A resting label may wrap; it may not be cut off. That same label still
-     needs 317px on a 360px phone, where only 304 exist, and a question ending
-     in "(optio…" is worse than a question on two lines. There is room: two
-     16px lines are 38px inside a 50px box, so it stays centred and the box
-     still does not change height. overflow: hidden is the last resort for a
-     label longer than anything here, not the expected outcome. */
+  /* A resting label may wrap; it may not be cut off. Nothing here needs to —
+     the longest is "Anything else? (optional)" at 200px, against 257px on a
+     320px phone — but a label that outgrew its box would be a question ending
+     in "(optio…", which is worse than a question on two lines. There is room
+     for the second: two 16px lines are 38px inside a 50px box, so it would
+     stay centred and the box would still not change height. overflow: hidden
+     is the last resort behind that, not the expected outcome. */
   overflow: hidden;
   /* Hit-testing only: the tap goes through to the input underneath, so the
      caret lands where the finger did instead of at the end of the value. The
@@ -478,14 +482,24 @@ button, input, select { font: inherit; color: inherit; }
 }
 
 /* Floated: focused, or holding anything at all. :placeholder-shown is why every
-   one of these inputs carries a placeholder — see the single space on #nm. */
+   one of these inputs carries a placeholder — see the single space on #nm.
+
+   .raised is the Community <select>, which is floated and stays floated. A
+   select has no empty state to describe — "Choose your community" is always
+   sitting in the box — and :placeholder-shown does not apply to one, so there
+   is nothing for a resting label to react to. Rather than leave the one label
+   in the group loose on the cream above its box, it takes the floated position
+   permanently: same 12px, same 6px from the top edge, same left inset, so it
+   lines up with the four that move. */
 .field.float input:focus + label,
-.field.float input:not(:placeholder-shown) + label {
+.field.float input:not(:placeholder-shown) + label,
+.field.float.raised label {
   top: 6px;
   transform: none;
   font-size: 12px;
   /* Floated, one line always: a second line would come down onto the value.
-     At 12px the longest label here is 238px, so it fits even at 320px. */
+     At 12px the longest label here is 150px against 257px, so it fits at
+     320px with room to spare. */
   white-space: nowrap;
   text-overflow: ellipsis;
 }

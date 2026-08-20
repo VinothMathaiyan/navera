@@ -544,7 +544,13 @@ export default function OrderFlow({ info, loadError }) {
             <label htmlFor="ph">WhatsApp number</label>
           </div>
 
-          <div className="field">
+          {/* Raised, not floating: the label sits where a floated one lands and
+              stays there. A <select> is never empty — "Choose your community"
+              is in the box from the start — and :placeholder-shown has nothing
+              to say about one, so there is no resting state to return to. The
+              label stays first in the DOM here because no CSS has to reach it
+              from the control's state. */}
+          <div className="field float raised">
             <label htmlFor="ar">Community</label>
             <select
               id="ar"
@@ -600,7 +606,7 @@ export default function OrderFlow({ info, loadError }) {
               placeholder="e.g. near the side gate, or call on arrival"
               onChange={(e) => setAddressNote(e.target.value)}
             />
-            <label htmlFor="an">Anything to help us find you? (optional)</label>
+            <label htmlFor="an">Anything else? (optional)</label>
           </div>
         </section>
 

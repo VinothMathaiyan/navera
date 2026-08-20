@@ -634,13 +634,21 @@ jobs is what made it unpredictable.
     previous-sibling combinator and the label is reached as `input + label`.
     `htmlFor` still does the associating, so the accessible name, autofill and
     tapping the label are all unchanged — verified, along with tab order.
-  - The label may wrap at rest and may not be truncated: "Anything to help us
-    find you? (optional)" needs 317px and a 360px phone has 304, so it takes two
-    centred lines there. Floated it is one line at 12px (238px) at any width.
+  - A resting label may wrap but may not be truncated. Nothing needs to today —
+    the longest is "Anything else? (optional)" at 200px against 257px on a 320px
+    phone — and the wrap is the fallback behind that, not the expected result.
   - **`.field` on its own is untouched, and /admin still uses it.** This is not
     a site-wide change to what a form field looks like.
-  - The Community `<select>` deliberately keeps its label above the box, because
-    `:placeholder-shown` does not apply to a select.
+  - **The Community `<select>` is `.field.float.raised`: its label is floated
+    and stays floated**, at the same 12px, the same 6px from the top edge and
+    the same left inset as the four that move, so all five line up. A select is
+    never empty — "Choose your community" is in the box from the start — and
+    `:placeholder-shown` says nothing about one, so there is no resting state
+    for it to return to. Its `<label>` is real and associated, not hidden.
+  - **`min-height: 53px` on both the inputs and the select is doing real work.**
+    The shared padding gives an `<input>` 53px but a `<select>` only 50px, since
+    a select's content box does not take the `line-height`. Three pixels reads
+    as one misaligned box in a column of five.
 - **One selected look for every choice.** Packs, delivery days and time bands
   all share `[aria-pressed="true"]` → filled `--green`, white text, plus a
   tick (`.chosen` badge on packs and dates, a `::before` tick on the pills).
