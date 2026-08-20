@@ -424,6 +424,96 @@ button, input, select { font: inherit; color: inherit; }
 .field input:focus, .field select:focus { border-color: var(--green-soft); }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
 
+/* ---------------- floating labels ----------------
+
+   Only on .field.float, which is the four text inputs in "Where should we
+   deliver?" on the customer page. /admin uses the plain .field and keeps its
+   labels above the boxes — this is not a site-wide change to how a field looks.
+
+   The rule that makes the whole thing work: the box is sized for the FLOATED
+   state from the start. Padding never changes between resting and floated, so
+   the box is the same height empty, focused and filled, and nothing on the page
+   moves when a label travels. Only the label itself moves. */
+
+.field.float { position: relative; }
+
+.field.float input,
+.field.float select {
+  /* 21 above / 6 below rather than 13 / 13: the top padding is the room the
+     floated label lives in, and it is reserved whether or not the label is up
+     there yet. 21 + 24 line + 6 + 3 border = 54px, comfortably over the 44px
+     tap-target floor the rest of the page holds to. */
+  padding: 21px 12px 6px;
+  line-height: 24px;
+  /* The padding alone gives an <input> 53px and a <select> 50px — a select's
+     content box does not take the line-height. Three pixels is enough to read
+     as a misaligned box in a column of five, so the floor is stated once and
+     both obey it. */
+  min-height: 53px;
+}
+
+/* Resting: inside the box, vertically centred, at the size of the text that
+   will be typed — so the label reads as the field's own content until it isn't. */
+.field.float label {
+  position: absolute;
+  left: 13.5px; /* 1.5px border + 12px padding — sits exactly over the text */
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+  /* The input's own 12px inset on both sides, plus the borders. */
+  max-width: calc(100% - 27px);
+  font-size: 16px;
+  line-height: 1.2;
+  color: var(--muted);
+  /* A resting label may wrap; it may not be cut off. Nothing here needs to —
+     the longest is "Anything else? (optional)" at 200px, against 257px on a
+     320px phone — but a label that outgrew its box would be a question ending
+     in "(optio…", which is worse than a question on two lines. There is room
+     for the second: two 16px lines are 38px inside a 50px box, so it would
+     stay centred and the box would still not change height. overflow: hidden
+     is the last resort behind that, not the expected outcome. */
+  overflow: hidden;
+  /* Hit-testing only: the tap goes through to the input underneath, so the
+     caret lands where the finger did instead of at the end of the value. The
+     <label for> association is untouched, so screen readers and autofill still
+     see a properly labelled field. */
+  pointer-events: none;
+  transition: top 120ms ease, transform 120ms ease, font-size 120ms ease;
+}
+
+/* Floated: focused, or holding anything at all. :placeholder-shown is why every
+   one of these inputs carries a placeholder — see the single space on #nm.
+
+   .raised is the Community <select>, which is floated and stays floated. A
+   select has no empty state to describe — "Choose your community" is always
+   sitting in the box — and :placeholder-shown does not apply to one, so there
+   is nothing for a resting label to react to. Rather than leave the one label
+   in the group loose on the cream above its box, it takes the floated position
+   permanently: same 12px, same 6px from the top edge, same left inset, so it
+   lines up with the four that move. */
+.field.float input:focus + label,
+.field.float input:not(:placeholder-shown) + label,
+.field.float.raised label {
+  top: 6px;
+  transform: none;
+  font-size: 12px;
+  /* Floated, one line always: a second line would come down onto the value.
+     At 12px the longest label here is 150px against 257px, so it fits at
+     320px with room to spare. */
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The hint underneath only makes sense once the label is out of its way, and
+   the label is out of its way exactly when the field is focused — a field with
+   something typed in it never renders its placeholder anyway. */
+.field.float input::placeholder { color: transparent; }
+.field.float input:focus::placeholder { color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .field.float label { transition: none; }
+}
+
 /* Matches .field label, but for a group of buttons rather than one control —
    a <label> would have nothing single to point at. */
 .field .lbl {

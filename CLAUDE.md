@@ -619,6 +619,36 @@ jobs is what made it unpredictable.
 
 ### Customer page — decisions that are load-bearing, not taste
 
+- **The four text fields in "Where should we deliver?" carry floating labels**
+  (`.field.float`, added on the `claude/floating-labels-delivery-7l69cn`
+  branch). Three things about them are load-bearing rather than cosmetic:
+  - **The box is padded for the floated state from the start** (21px top / 6px
+    bottom, never changing). That is the whole reason nothing jumps when a label
+    travels — only the label moves, and the box is 53px in every state.
+  - **Every one of those inputs carries a `placeholder`, including "Your name",
+    which has no hint to give — its placeholder is a single space.**
+    `:placeholder-shown` is what tells the label the field is empty, and it
+    matches nothing at all when the attribute is absent, which would leave that
+    label floated for ever. Do not "tidy away" the space.
+  - **The input comes before the label in the DOM**, because CSS has no
+    previous-sibling combinator and the label is reached as `input + label`.
+    `htmlFor` still does the associating, so the accessible name, autofill and
+    tapping the label are all unchanged — verified, along with tab order.
+  - A resting label may wrap but may not be truncated. Nothing needs to today —
+    the longest is "Anything else? (optional)" at 200px against 257px on a 320px
+    phone — and the wrap is the fallback behind that, not the expected result.
+  - **`.field` on its own is untouched, and /admin still uses it.** This is not
+    a site-wide change to what a form field looks like.
+  - **The Community `<select>` is `.field.float.raised`: its label is floated
+    and stays floated**, at the same 12px, the same 6px from the top edge and
+    the same left inset as the four that move, so all five line up. A select is
+    never empty — "Choose your community" is in the box from the start — and
+    `:placeholder-shown` says nothing about one, so there is no resting state
+    for it to return to. Its `<label>` is real and associated, not hidden.
+  - **`min-height: 53px` on both the inputs and the select is doing real work.**
+    The shared padding gives an `<input>` 53px but a `<select>` only 50px, since
+    a select's content box does not take the `line-height`. Three pixels reads
+    as one misaligned box in a column of five.
 - **One selected look for every choice.** Packs, delivery days and time bands
   all share `[aria-pressed="true"]` → filled `--green`, white text, plus a
   tick (`.chosen` badge on packs and dates, a `::before` tick on the pills).

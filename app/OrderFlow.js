@@ -504,20 +504,32 @@ export default function OrderFlow({ info, loadError }) {
             </p>
           )}
 
-          <div className="field">
-            <label htmlFor="nm">Your name</label>
+          {/* Floating labels: the input comes first in the DOM and the label
+              sits on top of it, absolutely positioned. That order is what lets
+              plain CSS reach the label from the input's own state — there is no
+              previous-sibling combinator. `htmlFor` still does the associating,
+              so screen readers, autofill and tapping the label are unchanged.
+
+              Every input here carries a placeholder, including this one, which
+              has no hint to give: :placeholder-shown is how the label knows the
+              field is empty, and it matches nothing at all when the attribute is
+              absent — the label would then sit floated for ever. A single space
+              is the whole trick, and it never shows: ::placeholder is
+              transparent until focus, and on focus a space still draws nothing. */}
+          <div className="field float">
             <input
               id="nm"
               value={name}
               autoComplete="name"
+              placeholder=" "
               required
               aria-required="true"
               onChange={(e) => setName(e.target.value)}
             />
+            <label htmlFor="nm">Your name</label>
           </div>
 
-          <div className="field">
-            <label htmlFor="ph">WhatsApp number</label>
+          <div className="field float">
             <input
               id="ph"
               value={phone}
@@ -529,9 +541,16 @@ export default function OrderFlow({ info, loadError }) {
               aria-required="true"
               onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
             />
+            <label htmlFor="ph">WhatsApp number</label>
           </div>
 
-          <div className="field">
+          {/* Raised, not floating: the label sits where a floated one lands and
+              stays there. A <select> is never empty — "Choose your community"
+              is in the box from the start — and :placeholder-shown has nothing
+              to say about one, so there is no resting state to return to. The
+              label stays first in the DOM here because no CSS has to reach it
+              from the control's state. */}
+          <div className="field float raised">
             <label htmlFor="ar">Community</label>
             <select
               id="ar"
@@ -561,8 +580,7 @@ export default function OrderFlow({ info, loadError }) {
             </a>
           </div>
 
-          <div className="field">
-            <label htmlFor="fl">Flat / block</label>
+          <div className="field float">
             <input
               id="fl"
               value={flat}
@@ -571,6 +589,7 @@ export default function OrderFlow({ info, loadError }) {
               aria-required="true"
               onChange={(e) => setFlat(e.target.value)}
             />
+            <label htmlFor="fl">Flat / block</label>
           </div>
 
           {/* The Morning / Evening / No preference control was removed on
@@ -579,8 +598,7 @@ export default function OrderFlow({ info, loadError }) {
               remain, nullable and defaulting to null — the page simply stops
               sending a value. The admin's manual-entry screen still offers it. */}
 
-          <div className="field">
-            <label htmlFor="an">Anything to help us find you? (optional)</label>
+          <div className="field float">
             <input
               id="an"
               value={addressNote}
@@ -588,6 +606,7 @@ export default function OrderFlow({ info, loadError }) {
               placeholder="e.g. near the side gate, or call on arrival"
               onChange={(e) => setAddressNote(e.target.value)}
             />
+            <label htmlFor="an">Anything else? (optional)</label>
           </div>
         </section>
 
