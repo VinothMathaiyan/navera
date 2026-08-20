@@ -79,6 +79,26 @@ and all public writes go through four `SECURITY DEFINER` functions:
   rule below). Both are conveniences, so an unrecognised preference is coerced
   to null and the note is trimmed and capped at 200 chars, rather than
   refusing the order over a cosmetic field.
+  - **Rate limits (added 2026-08-20), all read from `settings`, none hardcoded.**
+    They sit after the cutoff and delivery-day checks and before the items loop,
+    so a refusal writes nothing and a customer picking a non-delivery day hears
+    that rather than "the day is full":
+    - `max_orders_per_phone_per_day` (5) — orders from one phone in a rolling
+      24 hours. Counts every order, cancelled ones included.
+    - `max_orders_per_delivery_date` (60) — non-cancelled orders on one date,
+      the circuit breaker on what can actually be made in an evening.
+    - `duplicate_window_seconds` (120) — a second order from the same phone for
+      the same delivery date inside the window is treated as a double tap.
+    - **`p_source` of `manual` or `whatsapp` skips all three.** A WhatsApp order
+      has already arrived and refusing to record it is what breaks the milk
+      forecast; Gowri may also key several in a row. The test is
+      `coalesce(p_source, '')` — a bare `not in` would return null on a null
+      source and silently skip every check.
+    - All three raise `P0001` with a message written to be read by a customer,
+      because `lib/db.js` passes raise-exception text straight through to the
+      page. Keep them in Navera's voice; no codes, no jargon.
+    - Backed by `orders(customer_id, created_at)`. The pre-existing
+      `orders_customer_idx` covers only the leading column.
   - Note for future changes: adding a parameter means a **new signature**, so
     the function has to be dropped and recreated, not `CREATE OR REPLACE`d —
     otherwise the old overload lingers and a call becomes ambiguous. Grants
@@ -326,6 +346,24 @@ plus a valid mixed-pack order — all passed before this was trusted.
     through the pre-`e38020d` modules gave dashboard 13.6 L vs production 0,
     and 8.5 L vs 0, which is the disagreement that was fixed. 37 maths cases
     pass under the restored rule. The test order was deleted.
+- **2026-08-20 — rate limits on `place_order`.** Three additive guard rails on
+  a function that is anon-callable by design; the SECURITY DEFINER architecture
+  is unchanged and was not "hardened". Limits live in `settings`, so they are
+  tunable without a migration. See the `place_order` notes above for the rules.
+  - The migration did **not** retype the function body. It read
+    `pg_get_functiondef` from the catalogue, spliced in the declarations and the
+    checks at two anchors, and refused to run unless each anchor matched exactly
+    once — so the token scoping, the untouched-customer-row behaviour and the
+    pricing reads are preserved byte for byte rather than by careful copying.
+    Worth reusing: it is the safest way to edit a function whose other lines are
+    load-bearing security fixes. Same signature, so `CREATE OR REPLACE` kept the
+    grants (re-verified: `anon` true, `public` false).
+  - Verified against the live function as `anon`: a normal order succeeded, the
+    6th from one phone in 24 h was refused, an identical repeat inside two
+    minutes was refused, and that same repeat went through with
+    `p_source = 'manual'`. Also checked that a phone already at the daily limit
+    still succeeds with `p_source = 'whatsapp'`. All eight test orders and both
+    test customers were deleted.
 - `.claude/launch.json` already carries a `navera-dev` config, so
   `preview_start` can run the dev server by that name. Note that `npm run
   build` and `next dev` share `.next/`: running a build while the dev server
