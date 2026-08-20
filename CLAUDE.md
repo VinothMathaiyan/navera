@@ -379,11 +379,29 @@ plus a valid mixed-pack order — all passed before this was trusted.
   resolved long ago — the `navera` project exists on Vercel and every push to
   `main` has auto-deployed since. Corrected 2026-08-16 after confirming 18
   deployments against the repo.
-  - Production: **https://navera-rouge.vercel.app** (aliases also include
-    `navera-vinothm13579-7150s-projects.vercel.app` and the branch alias
-    `navera-git-main-…`). Team `vinothm13579-7150's projects`, project
+  - Production is **https://naverafresh.in** — the primary domain, and the
+    one that serves the HTML. Team `vinothm13579-7150's projects`, project
     `prj_mUpNLTIUiVSxZfFSdYahx9rKs3Fb`, framework auto-detected as Next.js,
     region `iad1`.
+  - **`navera-rouge.vercel.app` is no longer the address to check, and
+    fetching it does not mean the deploy is broken.** It is still aliased to
+    the same production deployment, but Vercel redirects it to the primary
+    domain at the edge, so a request to it returns **307** with `location:
+    https://naverafresh.in/` and no markup at all. Nothing is wrong when that
+    happens — verify against `naverafresh.in`, or follow the redirect. The
+    older note here named rouge as production, which was true until the custom
+    domain was attached; corrected 2026-08-20. The other two aliases,
+    `navera-vinothm13579-7150s-projects.vercel.app` and the branch alias
+    `navera-git-main-…`, are also on the same deployment.
+  - **Vercel reports the merge commit for production, not the commit you
+    pushed.** A production deploy is built from whatever `main` points at, so
+    after a PR is merged the deployment's `githubCommitSha` is the *merge*
+    commit — `dd494ad`, say, not the `e2a4b8e` that was on the branch. The
+    branch's own sha appears only on its preview deployment. **A sha that
+    doesn't match what you pushed is the expected result after a merge, not
+    evidence the wrong thing shipped**; confirm by checking that your commit
+    is an ancestor of the deployed one (`git merge-base --is-ancestor`), and
+    then verify the artefact as below.
   - There is no `.vercel/project.json` in the repo and none is needed —
     deploys come from the GitHub integration, not from `npx vercel`.
   - **`READY` is not proof the change shipped.** It means the build finished.
