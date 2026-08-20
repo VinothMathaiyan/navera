@@ -677,40 +677,54 @@ export default function OrderFlow({ info, loadError }) {
           </div>
         )}
 
-        {/* signature — why we make it the night before.
-            The heading used to read "Why tomorrow, and not today", which was
-            true when every delivery was next-day. Under Sat/Sun/Mon the wait
-            can be five days, but the preparation-to-delivery gap is always one
-            night, so the new heading holds either way. The steps below were
-            audited at the same time and none of them name a day or imply
-            same-day preparation, so they are unchanged. */}
+        {/* signature — what happens after you order.
+            Heading history, because it has moved three times and for the same
+            reason each time: "Why tomorrow, and not today" was true only
+            while every delivery was next-day, and "Why we make it the night
+            before" answered a question the customer had not asked. This one
+            just names what follows, which is what the five steps below
+            actually are, and it is a question like every other heading on the
+            page. No step names a day or implies same-day preparation, which
+            is the one thing that has to stay true of the wording here.
+
+            The numbers are real text in a CSS-drawn circle — see .mnum in
+            globals.css. Not U+2460 ① and friends: those are missing from the
+            default fonts on a good number of Android builds and render as
+            tofu, which is the one place a step marker cannot afford to fail.
+            They are left readable by a screen reader rather than
+            aria-hidden, matching the .step-num digits in the form above. */}
         <section className="thread">
-          <h3>Why we make it the night before</h3>
+          <h3>What happens after you order?</h3>
           <p className="why">
             Your paneer never exists until you order it. Nothing sits in cold
             storage or on a shelf waiting for a buyer.
           </p>
           <div className="moments">
             <div className="moment">
+              <div className="mnum">1</div>
               <div className="when">You order</div>
               <div className="what">Before {clock(info.cutoff_time)}, for the day you chose.</div>
             </div>
             <div className="moment">
-              <div className="when">We procure fresh milk</div>
+              <div className="mnum">2</div>
+              <div className="when">We bring in the milk</div>
               <div className="what">
                 Milk from free-roaming cared cows, brought in for your order.
               </div>
             </div>
             <div className="moment">
-              <div className="when">We prepare fresh paneer</div>
+              <div className="mnum">3</div>
+              <div className="when">We make the paneer</div>
               <div className="what">Milk and lemon. Nothing else goes in.</div>
             </div>
             <div className="moment">
-              <div className="when">Carefully packed</div>
+              <div className="mnum">4</div>
+              <div className="when">We pack it</div>
               <div className="what">Packed as soon as it is made.</div>
             </div>
             <div className="moment">
-              <div className="when">Delivered fresh</div>
+              <div className="mnum">5</div>
+              <div className="when">We deliver it</div>
               <div className="what">To your door on the day you chose.</div>
             </div>
           </div>
