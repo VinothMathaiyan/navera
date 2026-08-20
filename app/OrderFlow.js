@@ -677,15 +677,16 @@ export default function OrderFlow({ info, loadError }) {
           </div>
         )}
 
-        {/* signature — why we make it the night before.
-            The heading used to read "Why tomorrow, and not today", which was
-            true when every delivery was next-day. Under Sat/Sun/Mon the wait
-            can be five days, but the preparation-to-delivery gap is always one
-            night, so the new heading holds either way. The steps below were
-            audited at the same time and none of them name a day or imply
-            same-day preparation, so they are unchanged. */}
+        {/* signature — what happens after you order.
+            Heading history, because it has moved twice and for the same
+            reason both times: "Why tomorrow, and not today" was true only
+            while every delivery was next-day, and "Why we make it the night
+            before" answered a question the customer had not asked. This one
+            just names what follows, which is what the five steps below
+            actually are. The steps have never named a day or implied same-day
+            preparation, so they are unchanged by any of it. */}
         <section className="thread">
-          <h3>Why we make it the night before</h3>
+          <h3>What happens after you order</h3>
           <p className="why">
             Your paneer never exists until you order it. Nothing sits in cold
             storage or on a shelf waiting for a buyer.

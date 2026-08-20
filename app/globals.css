@@ -103,16 +103,20 @@ button, input, select { font: inherit; color: inherit; }
      page cream across the bottom padding only. Tuning --masthead to the logo
      left it 3.07 dE from --cream, which is over JND — visible as a faint band
      on the confirmation screen, where the masthead meets the page directly
-     with no cutoff bar in between. The fade lands entirely inside the 22px
-     bottom padding, so it never sits behind text. */
+     with no cutoff bar in between. The fade lands entirely inside the
+     bottom padding, so it never sits behind text — if that padding is
+     tightened again, this length has to come down with it. */
   background: linear-gradient(
     to bottom,
-    var(--masthead) calc(100% - 22px),
+    var(--masthead) calc(100% - 14px),
     var(--cream) 100%
   );
   background-color: var(--masthead);
   color: var(--ink);
-  padding: 16px 18px 22px;
+  /* Trimmed from 16/22 on 2026-08-20: the mark itself is untouched, only the
+     air around it, so the phone reaches the packs sooner without the logo
+     losing any of its size. */
+  padding: 10px 18px 14px;
   text-align: center;
 }
 .masthead .logo-wrap {
@@ -124,7 +128,11 @@ button, input, select { font: inherit; color: inherit; }
      margin), so the box width is the mark's actual width on screen. */
   width: min(310px, 78vw);
   aspect-ratio: 1114 / 601;
-  margin: 0 auto;
+  /* The negative foot is the artwork's own 7.7% bottom whitespace (~12px at
+     phone size) being paid back, not a crop — Logo.png is never processed.
+     Without it the rule below sits ~18px under the mark while the CSS claims
+     6px. */
+  margin: 0 auto -6px;
 }
 /* The artwork carries 7.7% of its own height as whitespace below the "FRESH
    PANEER" line, so the margins here are the *remainder* of the visible gap,
@@ -145,7 +153,7 @@ button, input, select { font: inherit; color: inherit; }
 }
 .masthead .lede em { font-style: italic; color: inherit; }
 .masthead .two {
-  margin: 8px auto 0;
+  margin: 6px auto 0;
   max-width: 32ch;
   font-size: 14.5px;
   color: var(--muted);
@@ -156,7 +164,7 @@ button, input, select { font: inherit; color: inherit; }
 .cutoff {
   background: var(--mustard);
   color: var(--cocoa);
-  padding: 12px 18px;
+  padding: 10px 18px;
   text-align: center;
   font-size: 14.5px;
   font-weight: 600;
@@ -167,6 +175,9 @@ button, input, select { font: inherit; color: inherit; }
 /* ---------------- steps ---------------- */
 
 .step { margin-top: 30px; }
+/* The 30px is the rhythm *between* steps. Under the cutoff bar it was just
+   distance to the first thing there is to do, so the packs start higher. */
+.step:first-of-type { margin-top: 18px; }
 
 /* Each step is a focus target so a Change control in the summary can send you
    back to it — see backTo() in OrderFlow.js. tabIndex={-1} keeps it out of the
@@ -841,9 +852,9 @@ button, input, select { font: inherit; color: inherit; }
 @media (min-width: 600px) {
   .wrap { --pad: 24px; max-width: 528px; }
   /* Roomier than the phone, but nowhere near the old 40px top — the tightened
-     logo-to-lede gap has to hold at every width, not just on mobile. The 26px
-     foot still contains the 22px background fade. */
-  .masthead { padding: 24px 24px 26px; }
+     logo-to-lede gap has to hold at every width, not just on mobile. The 18px
+     foot still contains the 14px background fade. */
+  .masthead { padding: 16px 24px 18px; }
   /* Must exceed the phone's 78vw (~281px at 360), or the mark shrinks as the
      screen grows. The flat 250px here predates the landscape logo. */
   .masthead .logo-wrap { width: 340px; }
