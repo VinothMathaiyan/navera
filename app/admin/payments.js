@@ -105,6 +105,12 @@ export function computeMoney(orders, todayISO) {
   // Money that has actually arrived. Not billings, not the order book.
   const revenue = paid.reduce((sum, o) => sum + num(o.total), 0);
 
+  // What every sale was billed at, paid or not. This is the blended price's
+  // numerator, and it is deliberately a different question from `revenue`:
+  // one asks what the paneer sold for, the other asks what has been
+  // collected. Both are shown, and they must not be confused for each other.
+  const billed = sales.reduce((sum, o) => sum + num(o.total), 0);
+
   // Every gram sold, paid for or not — and NOT one gram given away. This is
   // the denominator the Excel tracker got wrong.
   const gramsSold = sales.reduce((sum, o) => sum + orderGrams(o), 0);
@@ -134,23 +140,26 @@ export function computeMoney(orders, todayISO) {
     pendingCount: pending.length,
     oldestPending: oldest, // { days, reference, id } or null
 
+    billed,
+
     gramsSold,
     kgSold,
-    // Revenue actually collected per kilo actually sold. Samples are in
-    // neither term.
+    // What a kilo of paneer actually sold for. Samples are in neither term —
+    // free paneer in the denominator is the Excel bug this module exists to
+    // fix.
     //
-    // Null, not a number, until BOTH terms exist. kgSold > 0 alone is not
-    // enough: paneer sold but not yet paid for makes the numerator 0 and
-    // renders "₹0 per kg", which reads as "we sell paneer for nothing"
-    // rather than "nobody has paid yet". A screen that has no answer must
-    // say so. Do not relax this to kgSold > 0.
+    // BOTH TERMS ARE THE SAME SET OF ORDERS: every sale, billed or collected
+    // is not the question here. That is the point of the definition — the
+    // figure is a property of what was sold, so it does not drift as payments
+    // arrive. It was briefly `revenue / kgSold` (paid money over all grams),
+    // which made it run low whenever money was outstanding and creep up as it
+    // came in; that mismatch was removed on 2026-08-21. If it is ever changed
+    // back, the two terms have to move together or the number means nothing.
     //
-    // Note the asymmetry this leaves, which is deliberate and specified:
-    // the numerator counts only money collected while the denominator counts
-    // every gram sold, so while there is money outstanding this figure runs
-    // low and catches up as the money arrives. The outstanding total sits
-    // directly above it on the dashboard for exactly that reason.
-    blendedPerKg: kgSold > 0 && paid.length > 0 ? revenue / kgSold : null,
+    // Null, not a number, when either term is genuinely zero. A rendered
+    // "₹0 per kg" reads as "we sell paneer for nothing", and a screen with no
+    // answer must say so rather than invent one.
+    blendedPerKg: kgSold > 0 && billed > 0 ? billed / kgSold : null,
 
     samplesGiven: samples.length,
     sampleGrams,

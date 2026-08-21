@@ -396,7 +396,12 @@ plus a valid mixed-pack order — all passed before this was trusted.
     was corrected to `not_applicable` / 0 / null on the way in, and again on a
     later attempt to charge it; all three enum constraints raised `23514` on
     bad values; the sample constraint raised `23514` with the trigger disabled.
-  - 42 maths cases and 61 browser assertions pass. The browser ran real
+  - **Blended price per kg was changed the same day**, at the founder's call,
+    from `revenue / kgSold` (money collected over all grams sold) to
+    `billed / kgSold` — both terms now count every sale, paid or not, so the
+    figure no longer drifts as payments arrive. "Revenue collected" remains as
+    its own figure beside the outstanding total. See the rule above.
+  - 51 maths cases and 65 browser assertions pass. The browser ran real
     Chromium against a production build with every Supabase payload captured
     byte-for-byte off the live database and replayed (the build container has
     no network egress to `supabase.co`), recording every write the page
@@ -699,11 +704,12 @@ tracked in a spreadsheet: whether it was a **sale or a sample**, and whether the
   than it sold for. So:
 
   ```
-  revenue          = sum(total)  where order_type='sale' and payment_status='paid'
-  paneer sold      = grams       where order_type='sale'      -- paid or not
-  blended per kg   = revenue / (paneer sold / 1000)
-  samples given    = count       where order_type='sample'
-  sample value     = list value of those grams, reported ALONE
+  revenue collected = sum(total)  where order_type='sale' and payment_status='paid'
+  billed            = sum(total)  where order_type='sale'      -- paid or not
+  paneer sold       = grams       where order_type='sale'      -- paid or not
+  blended per kg    = billed / (paneer sold / 1000)
+  samples given     = count       where order_type='sample'
+  sample value      = list value of those grams, reported ALONE
   ```
 
   **Samples are in neither term of the blended price, and their value is never
@@ -711,16 +717,26 @@ tracked in a spreadsheet: whether it was a **sale or a sample**, and whether the
   own bordered box outside the revenue rows, because a figure sitting in a grid
   of figures is a figure someone adds up. Pinned by a test that reproduces the
   spreadsheet's arithmetic and asserts the 30% gap.
-- **`blendedPerKg` is `null` until both terms exist — `kgSold > 0` alone is not
-  enough.** Paneer sold but not yet paid for makes the numerator zero and
-  renders "₹0 per kg", which reads as *we sell paneer for nothing* rather than
-  *nobody has paid yet*. This was caught in the browser, not in the maths.
-  Do not relax it.
-  - The definition leaves a deliberate asymmetry: **the numerator counts only
-    money collected while the denominator counts every gram sold**, so while
-    money is outstanding the figure runs low and catches up as it arrives. That
-    is the specified definition, not an oversight. The outstanding total sits
-    directly above it and the note says so in words.
+- **Both terms of the blended price count THE SAME SET OF ORDERS — every sale,
+  paid or not.** The numerator is `billed`, not `revenue`. That is what makes
+  the figure a property of what was sold rather than of what has been
+  collected, so **it does not drift as payments arrive**. Changed 2026-08-21,
+  the same day it shipped: it was briefly `revenue / kgSold` (money collected
+  over all grams sold), which ran low whenever money was outstanding and crept
+  up as it came in. If it is ever changed back, the two terms have to move
+  together or the number means nothing.
+  - `revenue` (paid only) and `billed` (all sales) are both returned and both
+    shown — "revenue collected" is its own figure on the dashboard, beside the
+    outstanding total. They are different questions and must not be swapped.
+- **`blendedPerKg` is `null` when either term is genuinely zero**, rather than
+  rendering "₹0 per kg", which reads as *we sell paneer for nothing*. The guard
+  was originally load-bearing for a different reason — under the old paid-only
+  numerator, paneer sold but unpaid rendered ₹0, caught in the browser and not
+  by the maths tests. That case cannot arise any more, but the guard stays for
+  the real zero (a sale billed at nothing).
+- **The outstanding total stays directly above the blended price on the
+  dashboard**, because the two answer adjacent questions: what the paneer sold
+  for, and how much of it has actually been collected.
 - **Ages are counted from `delivery_date`, not `created_at`.** An order for next
   Sunday is waiting, not overdue, so `pendingDays` goes negative and the card
   says "not due yet" rather than showing a number. The dashboard's "oldest

@@ -573,16 +573,10 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="ad-money-note">
-            Blended price is revenue collected ÷ paneer sold. Samples are in
-            neither — free paneer in the bottom half would understate every
-            kilo you actually sold.
-            {money.outstanding > 0 && money.blendedPerKg !== null && (
-              <>
-                {" "}
-                While {rupees(money.outstanding)} is still outstanding this runs
-                low, and rises as the money comes in.
-              </>
-            )}
+            Blended price is what every sale was billed ÷ paneer sold — both
+            halves count the same orders, paid or not, so it stays put as
+            money comes in. Samples are in neither: free paneer in the bottom
+            half would understate every kilo you actually sold.
           </div>
 
           {/* Kept visually apart from the revenue block above, because the one
