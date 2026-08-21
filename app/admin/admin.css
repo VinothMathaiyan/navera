@@ -243,6 +243,9 @@
 }
 .ad-anydate label { font-size: 13px; color: var(--muted); }
 .ad-anydate input {
+  /* 44px like every other control. It came out at 43px from its padding —
+     one pixel short, which is still short. */
+  min-height: 44px;
   background: var(--card);
   border: 1.5px solid var(--line);
   border-radius: var(--r-s);
@@ -807,6 +810,17 @@
    the page itself never scrolls sideways. */
 .ad-tablewrap {
   overflow-x: auto;
+  /* Load-bearing, and not for anything you can see. The table's unlabelled
+     Start column has a .sr-only header, and .sr-only is position: absolute.
+     With nothing positioned between it and the root, its containing block was
+     the page — and an absolutely positioned box is only clipped by an
+     ancestor's overflow when that ancestor is in its containing block chain.
+     So the header sat at the table's full 559px width, outside this scroll
+     box entirely, and set the PAGE's scrollWidth: the Production tab scrolled
+     sideways 149/134/95px at 360/375/414 while the table itself scrolled
+     correctly. Making this the containing block puts the header back inside
+     the clip. Do not remove it because nothing appears to depend on it. */
+  position: relative;
   /* Cancels the wrap's gutter exactly, so the scroll box runs edge to edge
      while the page never scrolls sideways. Reads the same variable the gutter
      does — spelled 18px here it would tear open the moment the gutter grew. */
