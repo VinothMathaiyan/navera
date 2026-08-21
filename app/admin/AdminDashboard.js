@@ -383,7 +383,9 @@ export default function AdminDashboard() {
       </nav>
 
       {view === "settings" ? (
-        <div className="ad-wrap">
+        /* is-narrow: a form is read along its lines, so this tab keeps the
+           wide gutter but not the wide column. */
+        <div className="ad-wrap is-narrow">
           {error && <div className="ad-err">{error}</div>}
           <Settings
             settings={settings}
@@ -658,22 +660,29 @@ export default function AdminDashboard() {
             </div>
           )}
 
+          {/* Outside .ad-orderlist on purpose: this is a message about the
+              whole list, not a card in it, so it spans the column rather
+              than sitting in the first grid cell. */}
           {!loading && orders.length > 0 && shownOrders.length === 0 && (
             <div className="ad-empty">
               Everything for {date ? shortDate(date) : "this date"} is paid for.
             </div>
           )}
 
-          {shownOrders.map((order) => (
-            <OrderCard
-              key={order.id}
-              order={order}
-              settings={settings}
-              today={today}
-              onStatusChanged={reloadAll}
-              onExpired={dropToLogin}
-            />
-          ))}
+          {/* Container only — OrderCard is unchanged. One column on a
+              phone, two at lg, three at xl. */}
+          <div className="ad-orderlist">
+            {shownOrders.map((order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                settings={settings}
+                today={today}
+                onStatusChanged={reloadAll}
+                onExpired={dropToLogin}
+              />
+            ))}
+          </div>
         </section>
       </div>
       )}

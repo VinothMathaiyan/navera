@@ -45,12 +45,51 @@
   margin: 8px 0 24px;
 }
 
+/* ---------------- the responsive scale ----------------
+
+   Everything below is phone-first and stays that way: the base rules are the
+   layout Gowri uses in the kitchen, and every wider rule is a min-width query
+   added on top. Nothing here is a max-width override of a desktop design.
+
+   Two numbers drive the whole thing, so the gutter and the content column can
+   never drift apart the way they did when both were spelled 18px in four
+   places (.ad-top, .ad-tabs, .ad-wrap and .ad-tablewrap's negative margin —
+   that last one has to cancel the gutter exactly or the table bleeds).
+
+     --ad-pad   the horizontal gutter
+     --ad-max   the content column
+
+   md 768 / lg 1024 / xl 1280. 768 is a breakpoint AND a size this gets tested
+   at, so these are min-width: a 768px screen gets the md rules. */
+
+.ad {
+  --ad-pad: 18px;
+  --ad-max: 560px;
+}
+@media (min-width: 768px) {
+  .ad { --ad-pad: 28px; --ad-max: 720px; }
+}
+@media (min-width: 1024px) {
+  .ad { --ad-pad: 32px; --ad-max: 1080px; }
+}
+@media (min-width: 1280px) {
+  /* Capped here on purpose. Past about this the order cards stop reading as a
+     group and the eye has to travel the whole monitor to pair a name with its
+     packs. A 1440px screen keeps 80px of cream either side. */
+  .ad { --ad-pad: 40px; --ad-max: 1280px; }
+}
+
 /* ---------------- chrome ---------------- */
 
 .ad-top {
   background: var(--green);
   color: var(--cream);
-  padding: 15px 18px;
+  /* The bar stays full-bleed — it is the page's edge — but its contents line
+     up with the content column below it rather than sitting out at the screen
+     edge on a wide monitor. max() does that without an inner wrapper: it is
+     the gutter on a phone and half the leftover width once the viewport is
+     wider than the column. */
+  padding: 15px max(var(--ad-pad), calc((100% - var(--ad-max)) / 2 + var(--ad-pad)));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -68,31 +107,40 @@
   text-transform: uppercase;
   color: var(--mustard);
 }
+/* Same 44px rule. This one makes the green header a little taller, which is
+   the cost of the tap target and was the deliberate trade. */
 .ad-signout {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   background: none;
   border: 1.5px solid rgba(255, 255, 255, 0.3);
   color: var(--cream);
   border-radius: var(--r-s);
-  padding: 7px 13px;
+  padding: 7px 15px;
   font-size: 13px;
   cursor: pointer;
 }
 .ad-signout:hover { border-color: var(--mustard); color: var(--mustard); }
 
 .ad-wrap {
-  max-width: 560px;
+  max-width: var(--ad-max);
   margin: 0 auto;
-  padding: 0 18px 64px;
+  padding: 0 var(--ad-pad) 64px;
 }
+/* Settings and Communities are a form, and a form is read along its lines —
+   a 1280px-wide text input is harder to use than a 600px one, not easier. So
+   that tab keeps the wide gutter but not the wide column. */
+.ad-wrap.is-narrow { max-width: min(var(--ad-max), 720px); }
 
 /* ---------------- section tabs ---------------- */
 
 .ad-tabs {
   display: flex;
   gap: 4px;
-  max-width: 560px;
+  max-width: var(--ad-max);
   margin: 0 auto;
-  padding: 12px 18px 0;
+  padding: 12px var(--ad-pad) 0;
 }
 .ad-tab {
   flex: 1 1 0;
@@ -110,6 +158,16 @@
 .ad-tab[aria-pressed="true"] {
   color: var(--green);
   border-bottom-color: var(--green);
+}
+/* Three tabs stretched across 1280px is a lot of travel for a control three
+   words wide, and the underline on the active one becomes a 400px rule. From
+   md they keep a sane width and sit at the left, under the brand. Still 44px
+   tall and still full-width on a phone.
+
+   This has to come after the .ad-tab rules above, not before: it is the same
+   specificity, so source order is what decides it. */
+@media (min-width: 768px) {
+  .ad-tab { flex: 0 1 190px; }
 }
 
 .ad-section { margin-top: 26px; }
@@ -217,6 +275,13 @@
   align-items: stretch;
   padding: 18px 0 4px;
 }
+/* The hero number is clamped against 12vw so a three-digit litre count cannot
+   overflow a 360px handset. On a monitor that vw term runs away — 12vw of
+   1440px is 172px — so the clamp is re-ceilinged rather than removed, keeping
+   the phone behaviour exactly as it was. */
+@media (min-width: 768px) {
+  .ad-hero-n { font-size: clamp(38px, 6vw, 60px); }
+}
 .ad-hero-fig { flex: 1 1 0; text-align: center; min-width: 0; }
 .ad-hero-fig + .ad-hero-fig { border-left: 1px solid rgba(255, 255, 255, 0.14); }
 .ad-hero-n {
@@ -243,14 +308,38 @@
   text-align: center;
 }
 
+/* The pack tiles. The base rule is untouched: flex-wrap with a 90px basis,
+   which puts two of them side by side on a 375px phone and is the layout that
+   was tested there. From md up they become an explicit grid — 2 columns, then
+   4 at lg — so a fifth pack size would not silently reflow into a ragged row
+   on a monitor.
+
+   Note there are only two pack sizes seeded today (200g, 500g), so the lg
+   step has nothing extra to place: it renders two tiles in the first two of
+   four columns. That is the requested ladder, not a bug — it starts paying
+   for itself the moment a third size exists. */
+/* Auto-fit rather than a column count per breakpoint. How many tiles there
+   are is data, not layout: one per pack size actually ordered, so today it is
+   two or three and tomorrow it could be one or four. A fixed 4-up left three
+   tiles occupying three quarters of the panel with a ragged gap; auto-fit
+   collapses the empty tracks and the surviving tiles share the row evenly at
+   every width.
+
+   The 90px floor is the old `flex: 1 1 90px` basis, kept deliberately so the
+   phone layout does not move: at 375px it still fits three tiles on one line
+   and still stretches two to half each, which is what the flex version did
+   and what was screenshotted. Lower it and a phone gains a fourth column. */
 .ad-fc-grid {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
   gap: 10px;
-  flex-wrap: wrap;
   padding: 15px 0 4px;
 }
+/* The empty state is a sentence, not a tile — it spans whatever the grid is
+   rather than being squeezed into one quarter-width column. */
+.ad-fc-grid > .ad-fc-empty { grid-column: 1 / -1; }
 .ad-fc-cell {
-  flex: 1 1 90px;
+  /* No flex basis any more — the track sizing above owns the width. */
   background: rgba(255, 255, 255, 0.07);
   border-radius: var(--r-s);
   padding: 11px 8px;
@@ -408,11 +497,18 @@
   justify-content: space-between;
 }
 .ad-orders-head .ad-h { margin-bottom: 0; }
+/* 44px like every other control on the site. It sat at 33.5px — the smallest
+   visible control in the admin — which is a real miss on a screen used
+   one-handed in a kitchen, not a rounding error. inline-flex because a bare
+   min-height leaves the label riding the padding rather than centred. */
 .ad-refresh {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   background: none;
   border: 1.5px solid var(--line);
   border-radius: var(--r-s);
-  padding: 6px 12px;
+  padding: 6px 14px;
   font-size: 13px;
   color: var(--muted);
   cursor: pointer;
@@ -429,6 +525,31 @@
   padding: 20px 16px;
   text-align: center;
 }
+
+/* The order list container, and only the container — .ad-order below is
+   exactly the card it always was. One column on a phone, two at lg, three at
+   xl.
+
+   align-items: start is load-bearing: a card grows when its WhatsApp menu or
+   its cancel confirmation opens, and stretched grid items would drag every
+   other card in the row to that height. */
+/* margin-top matches the 11px the first card used to carry itself, so the
+   list starts exactly where it did — the gap only ever spaced cards from each
+   other, never the heading from the first one. Verified by pixel-diffing the
+   whole 375px dashboard against the previous build. */
+.ad-orderlist { display: grid; gap: 11px; margin-top: 11px; }
+@media (min-width: 1024px) {
+  .ad-orderlist {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+@media (min-width: 1280px) {
+  .ad-orderlist { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+/* The card carries its own top margin for the stacked case; inside the grid
+   the gap does that job, and both together would double the first row's. */
+.ad-orderlist > .ad-order { margin-top: 0; }
 
 .ad-order {
   margin-top: 11px;
@@ -686,8 +807,44 @@
    the page itself never scrolls sideways. */
 .ad-tablewrap {
   overflow-x: auto;
-  margin-inline: -18px;
-  padding: 2px 18px 4px;
+  /* Cancels the wrap's gutter exactly, so the scroll box runs edge to edge
+     while the page never scrolls sideways. Reads the same variable the gutter
+     does — spelled 18px here it would tear open the moment the gutter grew. */
+  margin-inline: calc(-1 * var(--ad-pad));
+  padding: 2px var(--ad-pad) 4px;
+}
+
+/* At lg the production table and the notes beside it stop being stacked.
+
+   Worth saying plainly: the Production tab has no order list to put next to
+   the table — the orders live on the Dashboard tab. What this tab has is the
+   per-date table and the material that explains and undoes it, so those are
+   the two things that go side by side. */
+/* Deliberately NOT a grid below lg. A grid item is min-width: auto, so the
+   table's 480px floor became the column's floor and pushed the whole page
+   sideways at 375px — the one thing .ad-tablewrap exists to prevent. Below lg
+   this is an ordinary block and the markup lays out exactly as it did before.
+   minmax(0, 1fr) is the same guard on the grid track at lg. */
+.ad-prod-split { display: block; }
+@media (min-width: 1024px) {
+  .ad-prod-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+    gap: 28px;
+    align-items: start;
+  }
+  /* Inside the split the table is a column, not the full width of the page,
+     so it must not bleed into the gutter any more. It keeps overflow-x for
+     the case where a narrow lg window still cannot fit 480px of columns. */
+  .ad-prod-split .ad-tablewrap { margin-inline: 0; padding-inline: 0; }
+  .ad-prod-split .ad-note { margin-top: 0; }
+}
+
+/* The manual-entry form is a form: it keeps a readable measure instead of
+   stretching its inputs across the monitor. .field itself is not touched —
+   this caps the section around it. */
+@media (min-width: 768px) {
+  .ad-entry, .ad-add { max-width: 640px; }
 }
 .ad-table {
   width: 100%;

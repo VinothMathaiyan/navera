@@ -521,6 +521,48 @@ tables directly — the `admin manages X` policies (`ALL` / `to authenticated`
   absorbs it; expect to see that 401 in the network log even on a healthy
   login. It is not a bug to chase.
 
+#### Wide screens (added on the `claude/admin-responsive-widescreen-4k2p9x` branch)
+
+`admin.css` had exactly one media query in 922 lines — `max-width: 359px` for
+`.ad-pair` — so a 1440px monitor showed a 560px column with ~440px of dead
+cream either side. It is now phone-first **plus** min-width breakpoints at
+**md 768 / lg 1024 / xl 1280**. Rules to keep:
+
+- **Two custom properties on `.ad` drive everything**: `--ad-pad` (gutter,
+  18 → 28 → 32 → 40) and `--ad-max` (column, 560 → 720 → 1080 → 1280). Four
+  places used to spell `18px` independently — `.ad-top`, `.ad-tabs`,
+  `.ad-wrap` and **`.ad-tablewrap`'s negative margin, which has to cancel the
+  gutter exactly or the production table bleeds out of its scroll box**. They
+  all read the variables now; do not re-hardcode one.
+- **The base rules are the phone layout and stay that way.** Verified by
+  pixel-diffing all three tabs at 375px against the previous build: the
+  dashboard, production and settings screenshots are **byte-identical**. If a
+  change here alters a 375px byte, it is a regression, not a refinement.
+- **`.ad-prod-split` is `display: block` below lg on purpose.** A grid item is
+  `min-width: auto`, so the table's `min-width: 480px` became the column's
+  floor and pushed the whole page sideways at 375px — the exact thing
+  `.ad-tablewrap` exists to prevent. `minmax(0, 1fr)` is the same guard on the
+  grid track at lg. Every admin grid track here uses `minmax(0, …)`.
+- **`.ad-tab`'s md rule must sit *after* the `.ad-tab` block, not before.**
+  Same specificity, so source order decides; placed earlier it silently lost
+  and the tabs stayed stretched across 1280px.
+- `.ad-top` is full-bleed but its contents align to the content column via
+  `padding-inline: max(--ad-pad, (100% - --ad-max)/2 + --ad-pad)`. The
+  `+ --ad-pad` term is what makes the brand line up with the table below it;
+  without it the header sits one gutter to the left.
+- **Settings/Communities take `.ad-wrap.is-narrow`** (capped at 720px). A form
+  is read along its lines — a 1280px text input is harder to use, not easier.
+  `.ad-entry` and `.ad-add` are capped at 640px from md for the same reason.
+- **`.field` was not touched.** Admin uses the plain variant and the customer
+  page's floating labels depend on `.field.float`; nothing in admin.css may
+  reach either.
+- Known and left alone: `.ad-refresh` is 33.5px and `.ad-signout` 35.5px,
+  both below the 44px the rest of the site holds to. Pre-existing, above the
+  32px floor, and unchanged here.
+- With only two pack sizes seeded, `.ad-fc-grid`'s 4-column step at lg places
+  two tiles in the first two columns. That is the ladder doing what it was
+  asked to do, not a bug; it fills out when a third size exists.
+
 #### The order card — two axes, and they must stay apart
 
 Rebuilt 2026-08-16 after the founder found it confusing in hand testing. The

@@ -87,107 +87,113 @@ export default function Production({ orders, settings, dates, today, onChanged, 
         </div>
       )}
 
-      <div className="ad-tablewrap">
-        <table className="ad-table">
-          <caption className="sr-only">
-            Production for the next six delivery days. Paneer, milk and lemons
-            cover only the orders still to make.
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">Date</th>
-              <th scope="col" className="num">Orders</th>
-              <th scope="col" className="num">Done</th>
-              <th scope="col" className="num">To make</th>
-              <th scope="col" className="num">Paneer</th>
-              <th scope="col" className="num">Milk</th>
-              <th scope="col" className="num">Lemons</th>
-              {/* No visible header: the buttons below label themselves, and a
-                  word here would read as another column of data. */}
-              <th scope="col"><span className="sr-only">Start the batch</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.date} className={r.date === today ? "is-today" : undefined}>
-                <th scope="row">
-                  {short(r.date)}
-                  {r.date === today && <span className="ad-today">Today</span>}
-                </th>
-                <td className="num">{r.orders}</td>
-                <td className="num soft">{r.done}</td>
-                <td className="num strong">{r.toMake}</td>
-                <td className="num">{r.kg > 0 ? `${kg(r.kg)} kg` : "—"}</td>
-                <td className="num">{r.milk > 0 ? `${r.milk} L` : "—"}</td>
-                <td className="num">{r.lemons > 0 ? r.lemons : "—"}</td>
-                {/* The action sits beside the numbers it acts on, so there is
-                    no matching a date in a button to a date in the table.
-                    Only on rows with something left to make — a Start on a
-                    finished or empty day is a button that does nothing. */}
-                <td className="act">
-                  {r.notStarted > 0 ? (
-                    <button
-                      type="button"
-                      className="ad-row-start"
-                      disabled={busyDate === r.date}
-                      // "Start" alone is ambiguous once it is out of a
-                      // full-width block, so the accessible name carries the
-                      // date and the count the visible column already shows.
-                      aria-label={`Start ${short(r.date)} — ${r.notStarted} order${
-                        r.notStarted === 1 ? "" : "s"
-                      }`}
-                      onClick={() => markPreparing(r.date)}
-                    >
-                      {busyDate === r.date ? "…" : "Start"}
-                    </button>
-                  ) : (
-                    <span className="soft">—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {rows.length === 0 && (
+      {/* Stacked on a phone exactly as before; two columns from lg, the
+          table on the left and the notes that explain it on the right. */}
+      <div className="ad-prod-split">
+        <div className="ad-tablewrap">
+          <table className="ad-table">
+            <caption className="sr-only">
+              Production for the next six delivery days. Paneer, milk and lemons
+              cover only the orders still to make.
+            </caption>
+            <thead>
               <tr>
-                <td colSpan={8} className="ad-fc-empty">
-                  No delivery days are configured. Set them under Settings.
-                </td>
+                <th scope="col">Date</th>
+                <th scope="col" className="num">Orders</th>
+                <th scope="col" className="num">Done</th>
+                <th scope="col" className="num">To make</th>
+                <th scope="col" className="num">Paneer</th>
+                <th scope="col" className="num">Milk</th>
+                <th scope="col" className="num">Lemons</th>
+                {/* No visible header: the buttons below label themselves, and a
+                    word here would read as another column of data. */}
+                <th scope="col"><span className="sr-only">Start the batch</span></th>
               </tr>
-            )}
-          </tbody>
-          <tfoot>
-            <tr>
-              <th scope="row">Still to make</th>
-              <td className="num">{totals.orders}</td>
-              <td className="num soft">{totals.done}</td>
-              <td className="num strong">{totals.toMake}</td>
-              <td className="num">{totals.kg > 0 ? `${kg(totals.kg)} kg` : "—"}</td>
-              <td className="num">{totals.milk > 0 ? `${totals.milk} L` : "—"}</td>
-              <td className="num">{totals.lemons > 0 ? totals.lemons : "—"}</td>
-              <td />
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-
-      <p className="ad-note">
-        Paneer, milk and lemons count the <strong>still to make</strong> orders
-        only — anything already preparing, dispatched or delivered has had its
-        milk bought, and cancelled orders are excluded entirely.{" "}
-        <strong>Start</strong> marks that whole evening&apos;s batch as
-        preparing, which takes it out of these figures.
-      </p>
-
-      {lastBulk && (
-        <div className="ad-undo" role="status">
-          <span>
-            {lastBulk.ids.length} order{lastBulk.ids.length === 1 ? "" : "s"} on{" "}
-            {short(lastBulk.date)} marked preparing.
-          </span>
-          <button type="button" className="ad-mini" onClick={undoBulk}>
-            Undo
-          </button>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.date} className={r.date === today ? "is-today" : undefined}>
+                  <th scope="row">
+                    {short(r.date)}
+                    {r.date === today && <span className="ad-today">Today</span>}
+                  </th>
+                  <td className="num">{r.orders}</td>
+                  <td className="num soft">{r.done}</td>
+                  <td className="num strong">{r.toMake}</td>
+                  <td className="num">{r.kg > 0 ? `${kg(r.kg)} kg` : "—"}</td>
+                  <td className="num">{r.milk > 0 ? `${r.milk} L` : "—"}</td>
+                  <td className="num">{r.lemons > 0 ? r.lemons : "—"}</td>
+                  {/* The action sits beside the numbers it acts on, so there is
+                      no matching a date in a button to a date in the table.
+                      Only on rows with something left to make — a Start on a
+                      finished or empty day is a button that does nothing. */}
+                  <td className="act">
+                    {r.notStarted > 0 ? (
+                      <button
+                        type="button"
+                        className="ad-row-start"
+                        disabled={busyDate === r.date}
+                        // "Start" alone is ambiguous once it is out of a
+                        // full-width block, so the accessible name carries the
+                        // date and the count the visible column already shows.
+                        aria-label={`Start ${short(r.date)} — ${r.notStarted} order${
+                          r.notStarted === 1 ? "" : "s"
+                        }`}
+                        onClick={() => markPreparing(r.date)}
+                      >
+                        {busyDate === r.date ? "…" : "Start"}
+                      </button>
+                    ) : (
+                      <span className="soft">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="ad-fc-empty">
+                    No delivery days are configured. Set them under Settings.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th scope="row">Still to make</th>
+                <td className="num">{totals.orders}</td>
+                <td className="num soft">{totals.done}</td>
+                <td className="num strong">{totals.toMake}</td>
+                <td className="num">{totals.kg > 0 ? `${kg(totals.kg)} kg` : "—"}</td>
+                <td className="num">{totals.milk > 0 ? `${totals.milk} L` : "—"}</td>
+                <td className="num">{totals.lemons > 0 ? totals.lemons : "—"}</td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
         </div>
-      )}
+
+        <div className="ad-prod-side">
+          <p className="ad-note">
+            Paneer, milk and lemons count the <strong>still to make</strong>{" "}
+            orders only — anything already preparing, dispatched or delivered
+            has had its milk bought, and cancelled orders are excluded
+            entirely. <strong>Start</strong> marks that whole evening&apos;s
+            batch as preparing, which takes it out of these figures.
+          </p>
+
+          {lastBulk && (
+            <div className="ad-undo" role="status">
+              <span>
+                {lastBulk.ids.length} order{lastBulk.ids.length === 1 ? "" : "s"}{" "}
+                on {short(lastBulk.date)} marked preparing.
+              </span>
+              <button type="button" className="ad-mini" onClick={undoBulk}>
+                Undo
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
     </section>
   );
