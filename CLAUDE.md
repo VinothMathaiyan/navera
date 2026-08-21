@@ -543,6 +543,18 @@ cream either side. It is now phone-first **plus** min-width breakpoints at
   floor and pushed the whole page sideways at 375px — the exact thing
   `.ad-tablewrap` exists to prevent. `minmax(0, 1fr)` is the same guard on the
   grid track at lg. Every admin grid track here uses `minmax(0, …)`.
+- **`.ad-tablewrap` must keep `position: relative`, and it is not decoration.**
+  An absolutely positioned `.sr-only` element is only clipped by an ancestor's
+  `overflow` if that ancestor is **positioned**. Without `position: relative`
+  on the scroll container, the visually hidden header on the Start column sits
+  at the table's full width and sets `document.scrollWidth`, so the *page*
+  scrolls sideways on a narrow screen — 149/134/95px at 360/375/414.
+  - **It presents as "the table is escaping its container", and the table is
+    fine.** It scrolls correctly inside its own box the whole time; what is
+    outside the box is a 1px invisible span. Check `.sr-only` first, before
+    touching the table's `min-width`, the wrap's margins or the split.
+  - Fixed in `3d57f34` by adding `position: relative` to `.ad-tablewrap`. The
+    same trap applies to any future scroll container holding an `.sr-only`.
 - **`.ad-tab`'s md rule must sit *after* the `.ad-tab` block, not before.**
   Same specificity, so source order decides; placed earlier it silently lost
   and the tabs stayed stretched across 1280px.
