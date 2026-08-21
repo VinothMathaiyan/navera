@@ -570,17 +570,36 @@ cream either side. It is now phone-first **plus** min-width breakpoints at
   reach either.
 - **Tap targets: `.ad-refresh` and `.ad-signout` are no longer exceptions.**
   They were 33.5px and 35.5px when this section was first written; both went
-  to 44px in #7, and the "Or any date" input followed from 43px in #8. On all
-  three tabs as they normally render, every control is now at or above 44px —
-  measured at 360/375/768/1280.
-  - **Two exceptions remain, and both live inside manual entry**, which is
-    exactly why a sweep of the closed dashboard misses them: `.ad-close` (the
-    ×) at 26px and `.ad-editlink` ("Change details") at 20px. Pre-existing and
-    untouched. **Open the form before measuring** — that is how these two got
-    missed twice.
-- With only two pack sizes seeded, `.ad-fc-grid`'s 4-column step at lg places
-  two tiles in the first two columns. That is the ladder doing what it was
-  asked to do, not a bug; it fills out when a third size exists.
+  to 44px in #7, the "Or any date" input followed from 43px in #8, and
+  `.ad-close` (the ×, 26px) and `.ad-editlink` ("Change details", 20px) in #9.
+  **There is no standing exception left in the admin**: every control on every
+  tab is at or above 44px, measured at 360/375/768/1280.
+  - **Measure with manual entry OPEN.** `.ad-close` and `.ad-editlink` only
+    exist while the form is on screen, so a sweep of the closed dashboard says
+    "all clear" and means nothing about them. That is exactly how those two
+    survived two separate passes before anyone saw them.
+  - `.ad-editlink` takes the customer page's `.notlisted` / `.notyou`
+    treatment — `inline-flex`, `align-items: center`, `min-height: 44px`, and
+    nothing else. It stays a text link: no background, no border, no padding,
+    shrink-to-fit width. Verified against a build of the previous commit that
+    its left edge and width are unchanged to the pixel (48 / 97) and only the
+    box height moved, 20 → 44; every other element in the form measured
+    identical. **A link inside a sentence gets height, never a box.**
+  - `.ad-close` also takes `min-width: 44px`, unlike the text links: it was
+    about 21px wide, and a 44px-tall 21px-wide button is still a 21px-wide
+    button. Its right edge does not move (340px before and after) — the glyph
+    just centres in its own box.
+- **`.ad-fc-grid` has no column-count ladder any more.** It was 2 columns at
+  md and 4 at lg, which left three tiles filling three quarters of the panel
+  with a ragged gap; #7 replaced the whole thing with a single
+  `repeat(auto-fit, minmax(90px, 1fr))` and dropped both media queries. How
+  many tiles there are is data — one per pack size actually ordered — so
+  auto-fit collapses the empty tracks and the survivors share the row evenly
+  at any width.
+  - **The 90px floor is the old `flex: 1 1 90px` basis and is load-bearing.**
+    It is what keeps the phone layout still: 375px fits three tiles on one
+    line and stretches two to half each, exactly as the flex version did.
+    Lower it and a phone silently gains a fourth column.
 
 #### The order card — two axes, and they must stay apart
 
