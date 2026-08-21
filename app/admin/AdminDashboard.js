@@ -308,7 +308,9 @@ export default function AdminDashboard() {
       </nav>
 
       {view === "settings" ? (
-        <div className="ad-wrap">
+        /* is-narrow: a form is read along its lines, so this tab keeps the
+           wide gutter but not the wide column. */
+        <div className="ad-wrap is-narrow">
           {error && <div className="ad-err">{error}</div>}
           <Settings
             settings={settings}
@@ -481,15 +483,19 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {orders.map((order) => (
-            <OrderCard
-              key={order.id}
-              order={order}
-              settings={settings}
-              onStatusChanged={reloadAll}
-              onExpired={dropToLogin}
-            />
-          ))}
+          {/* Container only — OrderCard is unchanged. One column on a
+              phone, two at lg, three at xl. */}
+          <div className="ad-orderlist">
+            {orders.map((order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                settings={settings}
+                onStatusChanged={reloadAll}
+                onExpired={dropToLogin}
+              />
+            ))}
+          </div>
         </section>
       </div>
       )}
