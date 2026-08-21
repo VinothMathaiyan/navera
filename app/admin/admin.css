@@ -920,3 +920,255 @@
 
 .ad-settings .cta { margin-top: 24px; }
 .ad-settings .ad-err div + div { margin-top: 3px; }
+
+/* ---------------- money, and samples ----------------
+
+   Payment tracking and sample orders, added 2026-08-21.
+
+   The one rule the styling has to carry: a sample must never be able to read
+   as income. The samples block is deliberately outside the revenue rows, in
+   its own bordered box with its own caption, rather than as a fourth figure
+   in the grid — a figure in the grid is a figure you add up.
+
+   Nothing here says anything by colour alone. A sample card carries the word
+   "Sample" as well as its tint, and every payment state is a word before it is
+   a colour, because this is read at a doorstep in daylight. */
+
+.ad-money {
+  margin-top: 22px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 16px 15px 15px;
+}
+.ad-money-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ad-money-head .ad-h { margin-bottom: 0; }
+.ad-money-scope {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.ad-money-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+.ad-money-row + .ad-money-row {
+  margin-top: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.ad-money-fig { flex: 1 1 0; min-width: 0; }
+.ad-money-fig.is-wide { flex: 1.4 1 0; }
+.ad-money-fig .n {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--green);
+  overflow-wrap: anywhere;
+}
+.ad-money-fig .l {
+  margin-top: 3px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.ad-money-note {
+  margin-top: 11px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* Set apart on purpose. See the note at the top of this block. */
+.ad-money-samples {
+  margin-top: 14px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-s);
+  padding: 11px 12px;
+  background: var(--cream);
+}
+.ad-money-samples-head {
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--mustard-dk);
+}
+.ad-money-samples-body {
+  margin-top: 5px;
+  font-size: 14px;
+  color: var(--ink);
+}
+.ad-money-samples-body strong {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--green);
+}
+.ad-money-samples-foot {
+  margin-top: 5px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+/* ---------------- the unpaid filter ---------------- */
+
+.ad-filters { display: flex; gap: 8px; margin: 2px 0 14px; }
+.ad-filter {
+  min-height: 44px;
+  padding: 10px 15px;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ad-filter:hover { border-color: var(--green-soft); }
+.ad-filter[aria-pressed="true"] {
+  background: var(--green);
+  border-color: var(--green-deep);
+  color: #fff;
+}
+
+/* ---------------- sale / sample in manual entry ---------------- */
+
+.ad-typeswitch { display: flex; gap: 8px; margin-bottom: 16px; }
+.ad-type {
+  flex: 1 1 0;
+  min-height: 44px;
+  padding: 10px 8px;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-s);
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ad-type:hover:not(:disabled) { border-color: var(--green-soft); }
+.ad-type:disabled { opacity: 0.4; cursor: default; }
+.ad-type[aria-pressed="true"] {
+  background: var(--green);
+  border-color: var(--green-deep);
+  color: #fff;
+}
+
+.qty .lbl .sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.ad-entry-total.is-sample strong { color: var(--mustard-dk); }
+
+/* ---------------- the payment axis on a card ----------------
+
+   A third axis beside status and messages, and it writes exactly one column:
+   orders.payment_status (plus payment_method). It never moves a status. A
+   delivered order can be unpaid, and a paid one can still be in the kitchen —
+   which is precisely why these are not one control. */
+
+.ad-pay {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--r-s);
+  border: 1.5px solid var(--line);
+  background: var(--cream);
+}
+.ad-pay-state {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.ad-pay .ad-step { flex: 0 1 auto; min-width: 118px; }
+.ad-pay-methods { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ad-pay-methods .ad-step { min-width: 86px; }
+
+.ad-pay.is-paid {
+  background: #dcf3e0;
+  border-color: #b7ddc0;
+}
+.ad-pay.is-paid .ad-pay-state { color: #1a5c33; }
+
+.ad-pay.is-pending {
+  background: #fdecc8;
+  border-color: #eed79c;
+}
+.ad-pay.is-pending .ad-pay-state { color: var(--cocoa); }
+
+.ad-pay.is-na {
+  background: var(--sage);
+  border-color: #cbd7c6;
+}
+.ad-pay.is-na .ad-pay-state { color: var(--green-deep); }
+
+/* How long the money has been waiting. Counted from the delivery day, so the
+   two non-numeric states below are real answers, not placeholders. */
+.ad-pay-age {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+.ad-pay-age.is-today { background: var(--cocoa); }
+.ad-pay-age.is-future {
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  padding-left: 0;
+}
+
+/* ---------------- a sample order in the list ----------------
+
+   Distinct from a sale at a glance, but never by colour alone: the card also
+   carries a "Sample" tag and its money line reads "Free". */
+
+.ad-order.is-sample {
+  border-left: 4px solid var(--mustard);
+  background: #fffdf6;
+}
+.ad-sample-tag {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #fdecc8;
+  color: var(--cocoa);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.ad-free { font-weight: 600; color: var(--mustard-dk); }
+
+/* Two figures per row rather than three once the row would start hyphenating
+   rupee amounts. 360px is the narrowest handset this is built for. */
+@media (max-width: 400px) {
+  .ad-money-row { flex-wrap: wrap; }
+  .ad-money-fig { flex: 1 1 44%; }
+  .ad-money-fig.is-wide { flex: 1 1 100%; }
+  .ad-money-fig .n { font-size: 19px; }
+}

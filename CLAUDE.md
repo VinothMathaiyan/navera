@@ -61,6 +61,10 @@ reference, plus its **own** `access_token` opening that one order, and
 for that order — all four added by the 2026-08-17 security fix),
 `order_items`, `subscriptions`, `subscription_skips`.
 
+`orders` also carries `order_type` / `payment_status` / `payment_method` /
+`paid_at` since 2026-08-21 — see the payment-and-samples section below. The
+sample rule is enforced by a trigger **and** a constraint, not by the admin UI.
+
 **RLS is deny-by-default.** Public (anon) role has zero direct read access to
 customers, orders, order_items, subscriptions. It can only read `settings`,
 active `delivery_areas`, active `products`. All public reads of private data
@@ -71,7 +75,10 @@ and all public writes go through four `SECURITY DEFINER` functions:
 - `place_order(...)` — the only public write path. Validates phone format,
   recomputes the cutoff server-side (never trust a date from the browser),
   checks the area exists and is active, prices items from the `products`
-  table (never from client input), creates/updates the customer by phone,
+  table (never from client input), **always writes `order_type = 'sale'`** —
+  explicitly at the insert since 2026-08-21, and `order_type` is deliberately
+  not a parameter, so a browser cannot ask for a free order —
+  creates/updates the customer by phone,
   creates the order and items, returns the reference + a link token — **which
   one depends on whether the customer is new, see the two-token rule below.**
   Also
@@ -367,6 +374,38 @@ plus a valid mixed-pack order — all passed before this was trusted.
     `p_source = 'manual'`. Also checked that a phone already at the daily limit
     still succeeds with `p_source = 'whatsapp'`. All eight test orders and both
     test customers were deleted.
+- **2026-08-21 — payment tracking and sample orders.** Four columns on
+  `orders`, a normalising trigger, a 100g inactive sample product, and the
+  admin surfaces for all of it: a sale/sample toggle in manual entry, a payment
+  axis on every order card, an unpaid filter, and a Money panel carrying
+  outstanding / unpaid count / oldest age and the revenue metrics. See the
+  payment-and-samples section above for the rules each one established. Nothing
+  on the customer ordering page was touched, and no new anon-executable
+  function was added — the only public-path change is `place_order` naming
+  `order_type = 'sale'` explicitly at its insert.
+  - The `place_order` edit reused the **catalogue-splice** technique from the
+    2026-08-20 rate-limit migration rather than retyping the body: read
+    `pg_get_functiondef`, splice at two anchors, refuse to run unless each
+    matched exactly once. Same signature, so the grants survived
+    (re-verified: `anon` true, `public` false).
+  - Verified as the real `anon` role against the live function: a website order
+    came back `sale` / `pending` / null / null; the 100g pack was invisible to
+    a bare `select`, absent from `get_ordering_info`, and refused by
+    `place_order` even when named by its literal uuid. As `authenticated`: a
+    sample inserted with `total 115`, `payment_status 'pending'` and a method
+    was corrected to `not_applicable` / 0 / null on the way in, and again on a
+    later attempt to charge it; all three enum constraints raised `23514` on
+    bad values; the sample constraint raised `23514` with the trigger disabled.
+  - 42 maths cases and 61 browser assertions pass. The browser ran real
+    Chromium against a production build with every Supabase payload captured
+    byte-for-byte off the live database and replayed (the build container has
+    no network egress to `supabase.co`), recording every write the page
+    attempted. It caught the `₹0 per kg` bug that the maths tests did not.
+  - Contrast re-checked at 390 and 360 px: 13 new text/background pairs all at
+    or above WCAG AA, no horizontal scroll, no new control under 44 px.
+  - Both test orders and the test customer were deleted afterwards so the milk
+    forecast stays honest. **`order_reference_seq` now sits at 15**, so the
+    next real order is NAV-016 — the gap is testing, not lost orders.
 - `.claude/launch.json` already carries a `navera-dev` config, so
   `preview_start` can run the dev server by that name. Note that `npm run
   build` and `next dev` share `.next/`: running a build while the dev server
@@ -563,6 +602,14 @@ jobs is what made it unpredictable.
   excluded        = cancelled
   ```
 
+  **Samples are counted like any other order.** `computeForecast` filters on
+  `status` and nothing else, so a `confirmed` sample contributes its grams to
+  the milk, the lemons and the pack counts — which is right, because a sample
+  is made from milk exactly like a sale. Verified against the live Sat 22 Aug
+  rows: 1.3 kg / 11.05 L / 12 L milk / 12 lemons with the sample, 10 L without.
+  **Do not add an `order_type` filter to this module.** Money is the only axis
+  samples are excluded from, and that lives in `payments.js`.
+
   **`preparing` counts as already handled, and the reason is purchasing rather
   than production.** Gowri buys the milk and *then* presses Start, so an order
   in `preparing` has had its milk bought. Counting it would tell her to buy the
@@ -598,6 +645,107 @@ jobs is what made it unpredictable.
   you cannot buy 0.2 of a litre. Lemons keep deriving from exact litres, so the
   founder's measured batch still reads 8.5 L → 9 lemons.
 - Cancelled orders are excluded from every figure, as before.
+
+#### Payment tracking and samples (`app/admin/payments.js`)
+
+Added 2026-08-21. Two independent facts about an order that were previously
+tracked in a spreadsheet: whether it was a **sale or a sample**, and whether the
+**money has arrived**.
+
+- **Four columns on `orders`**: `order_type` (`sale` | `sample`, default
+  `sale`), `payment_status` (`pending` | `paid` | `not_applicable`, default
+  `pending`), `payment_method` (`cash` | `upi`, null unless paid) and
+  `paid_at`. Check constraints on all three enums.
+- **A sample is free, and the database is what makes that true — not the UI.**
+  Two mechanisms on purpose:
+  - `orders_payment_normalise`, a BEFORE INSERT OR UPDATE trigger, **coerces**:
+    an `order_type` of `sample` forces `payment_status = 'not_applicable'`,
+    `delivery_charge = 0` and `total = 0`. It also stamps `paid_at` when a row
+    becomes `paid` and clears both `paid_at` and `payment_method` when that is
+    undone, so the age of an unpaid order is measured against a clock nobody
+    can set from a browser.
+  - `orders_sample_is_free_check` **guarantees**. Verified as a real backstop
+    by disabling the trigger and trying to charge for a sample: `23514`.
+  - Together they mean no client can create a chargeable sample by accident
+    (the trigger) or on purpose (the constraint). Nothing in the JS has to
+    defend against one.
+- **`subtotal` is deliberately NOT zeroed on a sample.** It holds what the
+  paneer would have sold for, which is the acquisition cost the dashboard
+  reports. Only `total` and `delivery_charge` go to zero. A sample therefore
+  breaks `total = subtotal + delivery_charge`, and that is the point: goods
+  worth ₹90, charged ₹0.
+- **The 100g pack is a real `products` row with `is_active = false`, and it
+  must stay that way.** 100g was dropped from the customer-facing range and
+  that decision is locked. It is safe to have in the table because **all three
+  public product paths filter on `is_active`** — checked before it was added,
+  and re-checked as `anon` afterwards:
+  - `get_ordering_info` — `from public.products p where p.is_active`; as `anon`
+    it returns 200g and 500g only.
+  - `place_order`'s per-item lookup — `where id = ... and is_active`; as `anon`,
+    ordering the 100g by its literal uuid is refused with "That pack is not
+    available."
+  - the `active products readable by anyone` RLS policy — `qual: is_active`; as
+    `anon`, `select * from products` returns two rows.
+  - **Flipping `is_active` to true would put 100g back on the public site.**
+    That is the one thing not to do here. Admin manual entry reads the products
+    table unfiltered and writes `order_items` directly, which is the only
+    reason a sample can use the pack at all.
+- **`computeMoney(orders, todayISO)` is the maths**, taking rows RAW —
+  cancelled included — exactly as `computeForecast` does. Filters live in the
+  module so no call site can disagree.
+- **THE EXCEL BUG THIS EXISTS TO FIX.** The spreadsheet divided sales revenue
+  by *all* paneer made, samples included, understating the blended price per kg
+  by about 30%. Free paneer in the denominator makes every kilo look cheaper
+  than it sold for. So:
+
+  ```
+  revenue          = sum(total)  where order_type='sale' and payment_status='paid'
+  paneer sold      = grams       where order_type='sale'      -- paid or not
+  blended per kg   = revenue / (paneer sold / 1000)
+  samples given    = count       where order_type='sample'
+  sample value     = list value of those grams, reported ALONE
+  ```
+
+  **Samples are in neither term of the blended price, and their value is never
+  netted into revenue.** It is an acquisition cost. The dashboard puts it in its
+  own bordered box outside the revenue rows, because a figure sitting in a grid
+  of figures is a figure someone adds up. Pinned by a test that reproduces the
+  spreadsheet's arithmetic and asserts the 30% gap.
+- **`blendedPerKg` is `null` until both terms exist — `kgSold > 0` alone is not
+  enough.** Paneer sold but not yet paid for makes the numerator zero and
+  renders "₹0 per kg", which reads as *we sell paneer for nothing* rather than
+  *nobody has paid yet*. This was caught in the browser, not in the maths.
+  Do not relax it.
+  - The definition leaves a deliberate asymmetry: **the numerator counts only
+    money collected while the denominator counts every gram sold**, so while
+    money is outstanding the figure runs low and catches up as it arrives. That
+    is the specified definition, not an oversight. The outstanding total sits
+    directly above it and the note says so in words.
+- **Ages are counted from `delivery_date`, not `created_at`.** An order for next
+  Sunday is waiting, not overdue, so `pendingDays` goes negative and the card
+  says "not due yet" rather than showing a number. The dashboard's "oldest
+  pending" skips future-dated orders entirely.
+
+##### The payment axis on an order card
+
+A **third** axis beside status and messages, and the same rule applies: it
+writes exactly one thing.
+
+- **PAYMENT writes `orders.payment_status` (plus `payment_method`) and nothing
+  else. It never moves a status, and a status change never touches payment.**
+  A delivered order can be unpaid and a paid one can still be in the kitchen —
+  which is precisely why these are not one control.
+- Marking paid **asks cash or UPI before writing anything**. "Paid" with no
+  method is what makes a cash book impossible to reconcile a month later.
+  Verified in a browser: opening the choice issues zero requests; picking a
+  method issues exactly one `PATCH` with `{payment_status, payment_method}` and
+  no `status` and no `paid_at` — the stamp is the database's job.
+- Undo sends `payment_status: 'pending'` with a null method; the trigger clears
+  `paid_at`.
+- A sample card shows "Sample — nothing to collect" and offers no button at
+  all, because there is nothing to collect.
+- **Samples are distinguished by more than colour**: a mustard left border, a
+  "SAMPLE" tag, and a money line reading "Free · worth ₹90".
 
 #### Production tab (`app/admin/Production.js`)
 
@@ -898,9 +1046,17 @@ jobs is what made it unpredictable.
 - Areas: Casagrand, Castle, Airview, Navins Jayram. "Casagrand" is known to
   possibly need a more specific name (e.g. "Casagrand Irena") later — left
   as-is for now, flagged, not yet changed.
+- **Samples are 100g, always free, and only Gowri can create one.** They are
+  recorded as real orders so they count toward the milk — a sample is made from
+  milk exactly like a sale — but their value is tracked as an acquisition cost
+  and never as revenue. The 100g product row exists but is `is_active = false`
+  and must stay so; see the payment-and-samples section for why that is safe
+  and what would break it.
 - Packs: **200g ₹170 and 500g ₹390 only.** A 100g ₹90 pack appears on the
   existing print banner but was confirmed dropped — do not add it back
-  without an explicit new instruction.
+  without an explicit new instruction. **A 100g row now exists in `products`
+  for samples, deliberately inactive.** That is not the pack coming back: it is
+  invisible to every public path. Making it active is what would bring it back.
 - No delivery charge, no minimum order (both editable in `settings` if that
   changes).
 - **Lemons: 1 per litre of milk, always rounded UP to a whole lemon**
