@@ -568,9 +568,16 @@ cream either side. It is now phone-first **plus** min-width breakpoints at
 - **`.field` was not touched.** Admin uses the plain variant and the customer
   page's floating labels depend on `.field.float`; nothing in admin.css may
   reach either.
-- Known and left alone: `.ad-refresh` is 33.5px and `.ad-signout` 35.5px,
-  both below the 44px the rest of the site holds to. Pre-existing, above the
-  32px floor, and unchanged here.
+- **Tap targets: `.ad-refresh` and `.ad-signout` are no longer exceptions.**
+  They were 33.5px and 35.5px when this section was first written; both went
+  to 44px in #7, and the "Or any date" input followed from 43px in #8. On all
+  three tabs as they normally render, every control is now at or above 44px —
+  measured at 360/375/768/1280.
+  - **Two exceptions remain, and both live inside manual entry**, which is
+    exactly why a sweep of the closed dashboard misses them: `.ad-close` (the
+    ×) at 26px and `.ad-editlink` ("Change details") at 20px. Pre-existing and
+    untouched. **Open the form before measuring** — that is how these two got
+    missed twice.
 - With only two pack sizes seeded, `.ad-fc-grid`'s 4-column step at lg places
   two tiles in the first two columns. That is the ladder doing what it was
   asked to do, not a bug; it fills out when a third size exists.
