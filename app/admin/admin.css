@@ -397,14 +397,24 @@
   margin-bottom: 15px;
 }
 .ad-entry-head h2 { font-size: 19px; color: var(--green); }
+/* 44px square. It was 26px tall and about 21px wide — the smallest target in
+   the admin, and a close button is one you reach for in a hurry. min-width as
+   well as min-height here, unlike the text links: a 44px-tall, 21px-wide
+   button is still a 21px-wide button. Nothing visible changes but the glyph's
+   centring; background and border stay absent. */
 .ad-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
   background: none;
   border: 0;
   font-size: 26px;
   line-height: 1;
   color: var(--muted);
   cursor: pointer;
-  padding: 0 4px;
+  padding: 0;
 }
 
 .ad-lookup { font-size: 13.5px; color: var(--muted); margin: -4px 0 12px; }
@@ -420,9 +430,17 @@
 }
 .ad-known strong { font-size: 15.5px; color: var(--green-deep); }
 .ad-known span { font-size: 13.5px; color: var(--green-soft); }
+/* The same treatment .notlisted / .notyou use on the customer page for a link
+   sitting inside a sentence: inline-flex and a min-height, and nothing else.
+   It stays a text link — no background, no border, no padding, shrink-to-fit
+   width — so the only thing that changes is the height of the box around the
+   words. margin-top goes to 0 because the 44px box now supplies that space
+   itself; keeping both would push the card open twice over. */
 .ad-editlink {
+  display: inline-flex;
+  align-items: center;
   align-self: flex-start;
-  margin-top: 4px;
+  min-height: 44px;
   background: none;
   border: 0;
   padding: 0;
