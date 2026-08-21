@@ -107,12 +107,17 @@
   text-transform: uppercase;
   color: var(--mustard);
 }
+/* Same 44px rule. This one makes the green header a little taller, which is
+   the cost of the tap target and was the deliberate trade. */
 .ad-signout {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   background: none;
   border: 1.5px solid rgba(255, 255, 255, 0.3);
   color: var(--cream);
   border-radius: var(--r-s);
-  padding: 7px 13px;
+  padding: 7px 15px;
   font-size: 13px;
   cursor: pointer;
 }
@@ -313,23 +318,28 @@
    step has nothing extra to place: it renders two tiles in the first two of
    four columns. That is the requested ladder, not a bug — it starts paying
    for itself the moment a third size exists. */
+/* Auto-fit rather than a column count per breakpoint. How many tiles there
+   are is data, not layout: one per pack size actually ordered, so today it is
+   two or three and tomorrow it could be one or four. A fixed 4-up left three
+   tiles occupying three quarters of the panel with a ragged gap; auto-fit
+   collapses the empty tracks and the surviving tiles share the row evenly at
+   every width.
+
+   The 90px floor is the old `flex: 1 1 90px` basis, kept deliberately so the
+   phone layout does not move: at 375px it still fits three tiles on one line
+   and still stretches two to half each, which is what the flex version did
+   and what was screenshotted. Lower it and a phone gains a fourth column. */
 .ad-fc-grid {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
   gap: 10px;
-  flex-wrap: wrap;
   padding: 15px 0 4px;
-}
-@media (min-width: 768px) {
-  .ad-fc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (min-width: 1024px) {
-  .ad-fc-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 /* The empty state is a sentence, not a tile — it spans whatever the grid is
    rather than being squeezed into one quarter-width column. */
 .ad-fc-grid > .ad-fc-empty { grid-column: 1 / -1; }
 .ad-fc-cell {
-  flex: 1 1 90px;
+  /* No flex basis any more — the track sizing above owns the width. */
   background: rgba(255, 255, 255, 0.07);
   border-radius: var(--r-s);
   padding: 11px 8px;
@@ -487,11 +497,18 @@
   justify-content: space-between;
 }
 .ad-orders-head .ad-h { margin-bottom: 0; }
+/* 44px like every other control on the site. It sat at 33.5px — the smallest
+   visible control in the admin — which is a real miss on a screen used
+   one-handed in a kitchen, not a rounding error. inline-flex because a bare
+   min-height leaves the label riding the padding rather than centred. */
 .ad-refresh {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   background: none;
   border: 1.5px solid var(--line);
   border-radius: var(--r-s);
-  padding: 6px 12px;
+  padding: 6px 14px;
   font-size: 13px;
   color: var(--muted);
   cursor: pointer;
