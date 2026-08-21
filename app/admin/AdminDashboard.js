@@ -3,6 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { currentSession, db, signIn, signOut, SessionExpired } from "../../lib/admin";
 import { computeForecast } from "./forecast";
+import {
+  computeMoney,
+  isPending,
+  isSample,
+  METHOD_LABEL,
+  PAYMENT_METHODS,
+  pendingDays,
+} from "./payments";
 import Settings from "./Settings";
 import Areas from "./Areas";
 import Production from "./Production";
@@ -107,8 +115,23 @@ const MESSAGE_FOR_STATUS = {
 const ORDER_SELECT =
   "id,reference,delivery_date,status,source,subtotal,delivery_charge,total,notes," +
   "time_preference,address_note,created_at," +
+  "order_type,payment_status,payment_method,paid_at," +
   "customer:customers(id,name,phone,flat,area:delivery_areas(name))," +
   "items:order_items(quantity,weight_grams,unit_price)";
+
+/* The money panel is all-time, not date-scoped: outstanding money does not
+   belong to the delivery day you happen to be looking at. Its own read, kept
+   as thin as the maths allows — no customer join, no notes, no tokens. */
+const MONEY_SELECT =
+  "id,reference,status,order_type,payment_status,total,subtotal,delivery_date," +
+  "items:order_items(quantity,weight_grams,unit_price)";
+
+/* Samples are given as 100g. That pack is a real products row but is
+   is_active = false, so it is invisible to get_ordering_info, refused by
+   place_order and hidden from anon by RLS — 100g stays off the public site,
+   which is a locked decision. Manual entry writes order_items directly, which
+   is the only reason a sample can use it. */
+const SAMPLE_WEIGHT_GRAMS = 100;
 
 export default function AdminDashboard() {
   const [booted, setBooted] = useState(false);
@@ -116,6 +139,7 @@ export default function AdminDashboard() {
 
   const [settings, setSettings] = useState(null);
   const [products, setProducts] = useState([]);
+  const [sampleProduct, setSampleProduct] = useState(null);
   const [areas, setAreas] = useState([]);
 
   const [date, setDate] = useState(null);
@@ -125,6 +149,7 @@ export default function AdminDashboard() {
   const [error, setError] = useState(null);
   const [entryOpen, setEntryOpen] = useState(false);
   const [view, setView] = useState("dashboard");
+  const [unpaidOnly, setUnpaidOnly] = useState(false);
 
   // localStorage can only be read after mount, or server and client HTML differ.
   useEffect(() => {
@@ -151,7 +176,10 @@ export default function AdminDashboard() {
     try {
       const [settingsRows, productRows, areaRows] = await Promise.all([
         db("settings?select=*&limit=1"),
-        db("products?select=id,name,weight_grams,price&is_active=eq.true&order=sort_order"),
+        // Inactive rows are read too, because the 100g sample pack is one of
+        // them. They are split apart below — the sale packs a customer can
+        // order stay exactly the active ones.
+        db("products?select=id,name,weight_grams,price,is_active&order=sort_order"),
         // Active only: this feeds the manual-entry dropdown, which must match
         // what a customer can choose. The Communities screen does its own,
         // unfiltered read.
@@ -160,7 +188,12 @@ export default function AdminDashboard() {
 
       const s = settingsRows?.[0] ?? null;
       setSettings(s);
-      setProducts(productRows ?? []);
+      const allProducts = productRows ?? [];
+      setProducts(allProducts.filter((p) => p.is_active));
+      setSampleProduct(
+        allProducts.find((p) => !p.is_active && p.weight_grams === SAMPLE_WEIGHT_GRAMS) ??
+          null
+      );
       setAreas(areaRows ?? []);
 
       const t = todayISO(s?.timezone ?? "Asia/Kolkata");
@@ -236,17 +269,59 @@ export default function AdminDashboard() {
     loadWeek();
   }, [loadWeek]);
 
-  // A status change can affect either list, so both are refreshed together
-  // rather than leaving one showing a stale badge.
+  /* ------------------------------------------------ money, all time */
+
+  const [moneyOrders, setMoneyOrders] = useState([]);
+
+  const loadMoney = useCallback(async () => {
+    if (!session) return;
+    try {
+      const rows = await db(`orders?select=${MONEY_SELECT}&order=delivery_date.asc`);
+      setMoneyOrders(rows ?? []);
+    } catch (e) {
+      if (e instanceof SessionExpired) dropToLogin();
+      else setError(e.message);
+    }
+  }, [session, dropToLogin]);
+
+  useEffect(() => {
+    loadMoney();
+  }, [loadMoney]);
+
+  // A status or payment change can affect any of the three lists, so all three
+  // are refreshed together rather than leaving one showing a stale badge.
   const reloadAll = useCallback(async () => {
-    await Promise.all([loadOrders(), loadWeek()]);
-  }, [loadOrders, loadWeek]);
+    await Promise.all([loadOrders(), loadWeek(), loadMoney()]);
+  }, [loadOrders, loadWeek, loadMoney]);
 
   /* ------------------------------------------------ forecast */
 
   // Both litres-per-kg and lemons-per-litre are admin-editable rows, never
   // assumed here. See ./forecast.js for the maths and the rounding rule.
   const forecast = useMemo(() => computeForecast(orders, settings), [orders, settings]);
+
+  /* ------------------------------------------------ money */
+
+  // Samples are excluded from revenue and from paneer sold, and reported as
+  // their own acquisition figure. See ./payments.js for why that separation is
+  // the whole point.
+  const unpaidCount = useMemo(
+    () => orders.filter((o) => isPending(o) && o.status !== "cancelled").length,
+    [orders]
+  );
+  const shownOrders = useMemo(
+    () =>
+      unpaidOnly
+        ? orders.filter((o) => isPending(o) && o.status !== "cancelled")
+        : orders,
+    [orders, unpaidOnly]
+  );
+
+  const moneyToday = todayISO(settings?.timezone ?? "Asia/Kolkata");
+  const money = useMemo(
+    () => computeMoney(moneyOrders, moneyToday),
+    [moneyOrders, moneyToday]
+  );
 
   /* ------------------------------------------------ render */
 
@@ -445,11 +520,92 @@ export default function AdminDashboard() {
           </div>
         </section>
 
+        {/* money — all time, deliberately not scoped to the chosen date */}
+        <section className="ad-money">
+          <div className="ad-money-head">
+            <h2 className="ad-h">Money</h2>
+            <span className="ad-money-scope">all time</span>
+          </div>
+
+          {/* What is owed. The age is counted from the delivery day, so an
+              order for a day that hasn't arrived yet is waiting, not late. */}
+          <div className="ad-money-row">
+            <div className="ad-money-fig is-wide">
+              <div className="n">{rupees(money.outstanding)}</div>
+              <div className="l">outstanding</div>
+            </div>
+            <div className="ad-money-fig">
+              <div className="n">{money.pendingCount}</div>
+              <div className="l">order{money.pendingCount === 1 ? "" : "s"} unpaid</div>
+            </div>
+            <div className="ad-money-fig">
+              <div className="n">
+                {money.oldestPending ? money.oldestPending.days : "—"}
+              </div>
+              <div className="l">
+                {money.oldestPending
+                  ? `day${money.oldestPending.days === 1 ? "" : "s"} — oldest (${money.oldestPending.reference})`
+                  : "nothing overdue"}
+              </div>
+            </div>
+          </div>
+
+          {/* Revenue. Every figure here excludes samples, and the blended
+              price is the reason: dividing sales revenue by paneer that
+              includes giveaways makes every kilo look cheaper than it sold
+              for. Samples are an acquisition cost and get their own line. */}
+          <div className="ad-money-row">
+            <div className="ad-money-fig">
+              <div className="n">{rupees(money.revenue)}</div>
+              <div className="l">revenue collected</div>
+            </div>
+            <div className="ad-money-fig">
+              <div className="n">
+                {money.kgSold.toLocaleString("en-IN", { maximumFractionDigits: 2 })} kg
+              </div>
+              <div className="l">paneer sold</div>
+            </div>
+            <div className="ad-money-fig">
+              <div className="n">
+                {money.blendedPerKg === null
+                  ? "—"
+                  : rupees(Math.round(money.blendedPerKg))}
+              </div>
+              <div className="l">blended per kg</div>
+            </div>
+          </div>
+          <div className="ad-money-note">
+            Blended price is what every sale was billed ÷ paneer sold — both
+            halves count the same orders, paid or not, so it stays put as
+            money comes in. Samples are in neither: free paneer in the bottom
+            half would understate every kilo you actually sold.
+          </div>
+
+          {/* Kept visually apart from the revenue block above, because the one
+              thing this figure must never do is read as income. */}
+          <div className="ad-money-samples">
+            <div className="ad-money-samples-head">Samples given</div>
+            <div className="ad-money-samples-body">
+              <strong>{money.samplesGiven}</strong> sample
+              {money.samplesGiven === 1 ? "" : "s"} ·{" "}
+              {(money.sampleGrams / 1000).toLocaleString("en-IN", {
+                maximumFractionDigits: 2,
+              })}{" "}
+              kg · worth {rupees(money.sampleValue)}
+            </div>
+            <div className="ad-money-samples-foot">
+              An acquisition cost, not revenue. Never added to the figures
+              above.
+            </div>
+          </div>
+        </section>
+
         {/* manual entry */}
         {entryOpen ? (
           <ManualEntry
             settings={settings}
             products={products}
+            sampleProduct={sampleProduct}
             areas={areas}
             dates={dates}
             defaultDate={date}
@@ -472,8 +628,29 @@ export default function AdminDashboard() {
         <section className="ad-section">
           <div className="ad-orders-head">
             <h2 className="ad-h">Orders</h2>
-            <button type="button" className="ad-refresh" onClick={loadOrders} disabled={loading}>
+            <button type="button" className="ad-refresh" onClick={reloadAll} disabled={loading}>
               {loading ? "Loading…" : "Refresh"}
+            </button>
+          </div>
+
+          {/* Samples carry payment_status 'not_applicable', so they correctly
+              drop out of the unpaid view: there is nothing to collect. */}
+          <div className="ad-filters" role="group" aria-label="Filter orders">
+            <button
+              type="button"
+              className="ad-filter"
+              aria-pressed={!unpaidOnly}
+              onClick={() => setUnpaidOnly(false)}
+            >
+              All ({orders.length})
+            </button>
+            <button
+              type="button"
+              className="ad-filter"
+              aria-pressed={unpaidOnly}
+              onClick={() => setUnpaidOnly(true)}
+            >
+              Unpaid ({unpaidCount})
             </button>
           </div>
 
@@ -483,14 +660,24 @@ export default function AdminDashboard() {
             </div>
           )}
 
+          {/* Outside .ad-orderlist on purpose: this is a message about the
+              whole list, not a card in it, so it spans the column rather
+              than sitting in the first grid cell. */}
+          {!loading && orders.length > 0 && shownOrders.length === 0 && (
+            <div className="ad-empty">
+              Everything for {date ? shortDate(date) : "this date"} is paid for.
+            </div>
+          )}
+
           {/* Container only — OrderCard is unchanged. One column on a
               phone, two at lg, three at xl. */}
           <div className="ad-orderlist">
-            {orders.map((order) => (
+            {shownOrders.map((order) => (
               <OrderCard
                 key={order.id}
                 order={order}
                 settings={settings}
+                today={today}
                 onStatusChanged={reloadAll}
                 onExpired={dropToLogin}
               />
@@ -567,6 +754,7 @@ function Login({ onSignedIn }) {
 function ManualEntry({
   settings,
   products,
+  sampleProduct,
   areas,
   dates,
   defaultDate,
@@ -585,6 +773,14 @@ function ManualEntry({
 
   const [qty, setQty] = useState({});
   const [date, setDate] = useState(defaultDate);
+
+  // 'sale' | 'sample'. A sample is the 100g pack, given away: no money, no
+  // choice of pack. The database enforces both (payment_status forced to
+  // not_applicable and total to 0), so this control decides what gets typed,
+  // never whether the rule holds.
+  const [orderType, setOrderType] = useState("sale");
+  const [sampleQty, setSampleQty] = useState(1);
+  const isSampleEntry = orderType === "sample" && sampleProduct;
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -627,23 +823,36 @@ function ManualEntry({
     };
   }, [phone, onExpired]);
 
-  const lines = useMemo(
-    () =>
-      products
-        .filter((p) => (qty[p.id] ?? 0) > 0)
-        .map((p) => ({
-          product_id: p.id,
-          quantity: qty[p.id],
-          // Priced from the products table, never from anything typed in.
-          unit_price: Number(p.price),
-          weight_grams: p.weight_grams,
-        })),
-    [products, qty]
-  );
+  const lines = useMemo(() => {
+    // A sample is always the 100g pack and nothing else. unit_price stays the
+    // list price even though nothing is charged: it is what the paneer would
+    // have sold for, which is the acquisition cost the dashboard reports.
+    if (isSampleEntry) {
+      return [
+        {
+          product_id: sampleProduct.id,
+          quantity: sampleQty,
+          unit_price: Number(sampleProduct.price),
+          weight_grams: sampleProduct.weight_grams,
+        },
+      ];
+    }
+    return products
+      .filter((p) => (qty[p.id] ?? 0) > 0)
+      .map((p) => ({
+        product_id: p.id,
+        quantity: qty[p.id],
+        // Priced from the products table, never from anything typed in.
+        unit_price: Number(p.price),
+        weight_grams: p.weight_grams,
+      }));
+  }, [products, qty, isSampleEntry, sampleProduct, sampleQty]);
 
+  // What the paneer is worth at list price. For a sale it is what gets
+  // collected; for a sample it is recorded and then charged at zero.
   const subtotal = lines.reduce((sum, l) => sum + l.unit_price * l.quantity, 0);
-  const deliveryCharge = Number(settings?.delivery_charge ?? 0);
-  const total = subtotal + deliveryCharge;
+  const deliveryCharge = isSampleEntry ? 0 : Number(settings?.delivery_charge ?? 0);
+  const total = isSampleEntry ? 0 : subtotal + deliveryCharge;
 
   const known = lookup.state === "found";
   const ready =
@@ -653,7 +862,8 @@ function ManualEntry({
     areaId &&
     flat.trim() &&
     lines.length > 0 &&
-    date;
+    date &&
+    (orderType === "sale" || Boolean(sampleProduct));
 
   async function submit() {
     setBusy(true);
@@ -694,6 +904,12 @@ function ManualEntry({
           delivery_charge: deliveryCharge,
           total,
           notes: notes.trim() || null,
+          // The sample rule is sent as well as enforced. The database forces
+          // payment_status and total for a sample regardless of what arrives
+          // here (orders_payment_normalise), so this is the honest value
+          // rather than the guarantee — the guarantee is in Postgres.
+          order_type: isSampleEntry ? "sample" : "sale",
+          payment_status: isSampleEntry ? "not_applicable" : "pending",
           // time_preference is deliberately not sent — the column is nullable
           // and defaults to null. See the note by the removed control above.
           address_note: addressNote.trim() || null,
@@ -743,6 +959,8 @@ function ManualEntry({
     setNotes("");
     setAddressNote("");
     setQty({});
+    setOrderType("sale");
+    setSampleQty(1);
     setDone(null);
     setError(null);
   }
@@ -754,7 +972,17 @@ function ManualEntry({
           <div className="tick">✓</div>
           <div className="ref">{done.reference}</div>
           <p>
-            Saved for {shortDate(done.delivery_date)} — {rupees(done.total)} on delivery.
+            {done.order_type === "sample" ? (
+              <>
+                Sample saved for {shortDate(done.delivery_date)} — nothing to
+                collect. It still counts toward the milk.
+              </>
+            ) : (
+              <>
+                Saved for {shortDate(done.delivery_date)} — {rupees(done.total)} on
+                delivery.
+              </>
+            )}
           </p>
           <div className="ad-entry-actions">
             <button type="button" className="cta" onClick={reset}>
@@ -772,11 +1000,41 @@ function ManualEntry({
   return (
     <section className="ad-entry">
       <div className="ad-entry-head">
-        <h2>WhatsApp order</h2>
+        <h2>{isSampleEntry ? "Sample" : "WhatsApp order"}</h2>
         <button type="button" className="ad-close" onClick={onClose} aria-label="Close">
           ×
         </button>
       </div>
+
+      {/* Chosen first, because it changes what the rest of the form asks for:
+          a sample has one pack size and no money. */}
+      <div className="ad-typeswitch" role="group" aria-label="What is this order?">
+        <button
+          type="button"
+          className="ad-type"
+          aria-pressed={orderType === "sale"}
+          onClick={() => setOrderType("sale")}
+        >
+          Sale
+        </button>
+        <button
+          type="button"
+          className="ad-type"
+          aria-pressed={orderType === "sample"}
+          disabled={!sampleProduct}
+          onClick={() => setOrderType("sample")}
+        >
+          Sample
+        </button>
+      </div>
+
+      {orderType === "sample" && !sampleProduct && (
+        <div className="ad-err">
+          The {SAMPLE_WEIGHT_GRAMS}g sample pack isn&apos;t in the products
+          table, so a sample can&apos;t be recorded. Add it as an inactive
+          product first.
+        </div>
+      )}
 
       <div className="field">
         <label htmlFor="mp">Their number</label>
@@ -845,33 +1103,72 @@ function ManualEntry({
 
       {phone.length === 10 && (
         <>
-          <div className="ad-sub">Packs</div>
-          {products.map((p) => (
-            <div className="qty" key={p.id}>
-              <span className="lbl">
-                {p.weight_grams}g · {rupees(p.price)}
-              </span>
-              <div className="ctrls">
-                <button
-                  type="button"
-                  aria-label={`One less ${p.weight_grams}g pack`}
-                  onClick={() => setQty((q) => ({ ...q, [p.id]: Math.max(0, (q[p.id] ?? 0) - 1) }))}
-                >
-                  −
-                </button>
-                <span className="n">{qty[p.id] ?? 0}</span>
-                <button
-                  type="button"
-                  aria-label={`One more ${p.weight_grams}g pack`}
-                  onClick={() =>
-                    setQty((q) => ({ ...q, [p.id]: Math.min(50, (q[p.id] ?? 0) + 1) }))
-                  }
-                >
-                  +
-                </button>
+          <div className="ad-sub">{isSampleEntry ? "Sample packs" : "Packs"}</div>
+
+          {isSampleEntry && (
+            <>
+              <div className="qty">
+                <span className="lbl">
+                  {sampleProduct.weight_grams}g · free
+                  <span className="sub">
+                    worth {rupees(Number(sampleProduct.price) * sampleQty)}
+                  </span>
+                </span>
+                <div className="ctrls">
+                  <button
+                    type="button"
+                    aria-label={`One less ${sampleProduct.weight_grams}g sample`}
+                    onClick={() => setSampleQty((n) => Math.max(1, n - 1))}
+                  >
+                    −
+                  </button>
+                  <span className="n">{sampleQty}</span>
+                  <button
+                    type="button"
+                    aria-label={`One more ${sampleProduct.weight_grams}g sample`}
+                    onClick={() => setSampleQty((n) => Math.min(50, n + 1))}
+                  >
+                    +
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+              <p className="ad-note">
+                Samples are {SAMPLE_WEIGHT_GRAMS}g and always free. They still
+                use milk, so they count in the forecast — and their value is
+                tracked separately as an acquisition cost, never as revenue.
+              </p>
+            </>
+          )}
+
+          {!isSampleEntry &&
+            products.map((p) => (
+              <div className="qty" key={p.id}>
+                <span className="lbl">
+                  {p.weight_grams}g · {rupees(p.price)}
+                </span>
+                <div className="ctrls">
+                  <button
+                    type="button"
+                    aria-label={`One less ${p.weight_grams}g pack`}
+                    onClick={() =>
+                      setQty((q) => ({ ...q, [p.id]: Math.max(0, (q[p.id] ?? 0) - 1) }))
+                    }
+                  >
+                    −
+                  </button>
+                  <span className="n">{qty[p.id] ?? 0}</span>
+                  <button
+                    type="button"
+                    aria-label={`One more ${p.weight_grams}g pack`}
+                    onClick={() =>
+                      setQty((q) => ({ ...q, [p.id]: Math.min(50, (q[p.id] ?? 0) + 1) }))
+                    }
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            ))}
 
           <div className="ad-sub">Delivery date</div>
           <div className="ad-dates">
@@ -918,8 +1215,8 @@ function ManualEntry({
             />
           </div>
 
-          <div className="ad-entry-total">
-            <span>To collect on delivery</span>
+          <div className={`ad-entry-total${isSampleEntry ? " is-sample" : ""}`}>
+            <span>{isSampleEntry ? "Sample — nothing to collect" : "To collect on delivery"}</span>
             <strong>{rupees(total)}</strong>
           </div>
         </>
@@ -928,12 +1225,13 @@ function ManualEntry({
       {error && <div className="ad-err">{error}</div>}
 
       <button className="cta" disabled={!ready || busy} onClick={submit}>
-        {busy ? "Saving…" : "Save WhatsApp order"}
+        {busy ? "Saving…" : isSampleEntry ? "Save sample" : "Save WhatsApp order"}
       </button>
 
       <p className="ad-note">
-        Saved as a WhatsApp order so it counts toward the milk forecast. The 6 PM
-        cutoff isn&apos;t applied here — the order already reached you.
+        Saved so it counts toward the milk forecast — a sample uses milk like
+        any other batch. The 6 PM cutoff isn&apos;t applied here; the order
+        already reached you.
       </p>
     </section>
   );
@@ -947,6 +1245,10 @@ function ManualEntry({
      STATUS   where the order has got to. One row, one write. Advancing or
               stepping back is the ONLY thing on this card that touches
               orders.status.
+     PAYMENT  whether the money has arrived. One row, one write, and the ONLY
+              thing on this card that touches orders.payment_status. It never
+              moves a status: a delivered order can be unpaid and a paid one
+              can still be sitting in the kitchen.
      MESSAGE  what gets said to the customer. One WhatsApp button opening a
               short menu. It never writes anything.
 
@@ -957,7 +1259,7 @@ function ManualEntry({
 
    Advancing the status OFFERS the matching message and never sends it. §20 and
    §21 both put a human in that loop deliberately: Gowri taps, reviews, sends. */
-function OrderCard({ order, settings, onStatusChanged, onExpired }) {
+function OrderCard({ order, settings, today, onStatusChanged, onExpired }) {
   const customer = order.customer ?? {};
   const waNumber = customer.phone ? `91${customer.phone}` : null;
   const firstName = (customer.name ?? "").trim().split(" ")[0] || "there";
@@ -967,6 +1269,10 @@ function OrderCard({ order, settings, onStatusChanged, onExpired }) {
   const [statusBusy, setStatusBusy] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [payBusy, setPayBusy] = useState(false);
+  // Marking paid asks how, because "paid" without a method is the thing that
+  // makes a cash book impossible to reconcile later.
+  const [askMethod, setAskMethod] = useState(false);
   // Which message the last status change suggests. A suggestion only — it is
   // cleared by sending or by dismissing, and nothing sends on its own.
   const [offer, setOffer] = useState(null);
@@ -997,6 +1303,32 @@ function OrderCard({ order, settings, onStatusChanged, onExpired }) {
         setConfirmCancel(false);
       });
   }
+
+  /* Payment. Writes orders.payment_status and orders.payment_method only —
+     never orders.status, and never the other way round. paid_at is stamped by
+     the database trigger, and cleared by it on an undo, so the age of an
+     unpaid order is measured against a clock nobody can set from a browser. */
+  function setPayment(status, method) {
+    setPayBusy(true);
+    setError(null);
+    db(`orders?id=eq.${order.id}`, {
+      method: "PATCH",
+      body: { payment_status: status, payment_method: method ?? null },
+      prefer: "return=minimal",
+    })
+      .then(() => onStatusChanged?.())
+      .catch((e) => {
+        if (e instanceof SessionExpired) onExpired();
+        else setError(e.message);
+      })
+      .finally(() => {
+        setPayBusy(false);
+        setAskMethod(false);
+      });
+  }
+
+  const sample = isSample(order);
+  const waiting = pendingDays(order, today);
 
   const forward = nextStatus(order.status);
   const back = prevStatus(order.status);
@@ -1069,7 +1401,13 @@ function OrderCard({ order, settings, onStatusChanged, onExpired }) {
   const MENU = ["confirm", "dispatch", "reminder", "feedback"];
 
   return (
-    <article className={`ad-order${order.status === "cancelled" ? " is-cancelled" : ""}`}>
+    <article
+      className={
+        "ad-order" +
+        (order.status === "cancelled" ? " is-cancelled" : "") +
+        (sample ? " is-sample" : "")
+      }
+    >
       <div className="ad-order-top">
         <div>
           <div className="ad-order-name">{customer.name ?? "Unknown"}</div>
@@ -1082,6 +1420,9 @@ function OrderCard({ order, settings, onStatusChanged, onExpired }) {
           <span className={`ad-src src-${order.source}`}>
             {SOURCE_LABEL[order.source] ?? order.source}
           </span>
+          {/* A sample is marked on the card itself as well as by the tint,
+              so it is never colour alone that says this one was free. */}
+          {sample && <span className="ad-sample-tag">Sample</span>}
           <span className={`ad-status st-${order.status}`}>
             {STATUS_LABEL[order.status] ?? order.status}
           </span>
@@ -1103,7 +1444,13 @@ function OrderCard({ order, settings, onStatusChanged, onExpired }) {
 
       <div className="ad-order-line">
         <span>{customer.phone ?? "—"}</span>
-        <span>{rupees(order.total)}</span>
+        <span>
+          {sample ? (
+            <span className="ad-free">Free · worth {rupees(order.subtotal)}</span>
+          ) : (
+            rupees(order.total)
+          )}
+        </span>
       </div>
 
       {/* The "Prefers Morning" badge was removed on 2026-08-16 — dead UI. The
@@ -1138,7 +1485,79 @@ function OrderCard({ order, settings, onStatusChanged, onExpired }) {
         </>
       ) : (
         <>
-          {/* ---- axis 1: status. The only writer on this card. ---- */}
+          {/* ---- axis 1: payment. Writes payment_status only. ---- */}
+          <div className="ad-axis">Payment</div>
+          {sample ? (
+            <div className="ad-pay is-na">
+              <span className="ad-pay-state">Sample — nothing to collect</span>
+            </div>
+          ) : order.payment_status === "paid" ? (
+            <div className="ad-pay is-paid">
+              <span className="ad-pay-state">
+                Paid{order.payment_method ? ` · ${METHOD_LABEL[order.payment_method] ?? order.payment_method}` : ""}
+              </span>
+              <button
+                type="button"
+                className="ad-mini"
+                disabled={payBusy}
+                onClick={() => setPayment("pending")}
+              >
+                {payBusy ? "…" : "Undo"}
+              </button>
+            </div>
+          ) : askMethod ? (
+            <div className="ad-pay is-asking" role="group" aria-label="How did they pay?">
+              <span className="ad-pay-state">Paid how?</span>
+              <div className="ad-pay-methods">
+                {PAYMENT_METHODS.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className="ad-step is-primary"
+                    disabled={payBusy}
+                    onClick={() => setPayment("paid", m)}
+                  >
+                    {METHOD_LABEL[m]}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="ad-mini"
+                  disabled={payBusy}
+                  onClick={() => setAskMethod(false)}
+                >
+                  Not now
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="ad-pay is-pending">
+              <span className="ad-pay-state">
+                Unpaid · {rupees(order.total)}
+                {/* Counted from the delivery day, so an order for a day that
+                    hasn't arrived is waiting rather than late. */}
+                {waiting !== null && waiting > 0 && (
+                  <span className="ad-pay-age">
+                    {waiting} day{waiting === 1 ? "" : "s"}
+                  </span>
+                )}
+                {waiting === 0 && <span className="ad-pay-age is-today">due today</span>}
+                {waiting !== null && waiting < 0 && (
+                  <span className="ad-pay-age is-future">not due yet</span>
+                )}
+              </span>
+              <button
+                type="button"
+                className="ad-step is-primary"
+                disabled={payBusy}
+                onClick={() => setAskMethod(true)}
+              >
+                {payBusy ? "…" : "Mark paid"}
+              </button>
+            </div>
+          )}
+
+          {/* ---- axis 2: status. The only writer of orders.status. ---- */}
           <div className="ad-axis">Status</div>
           <div className="ad-order-steps">
             <button
@@ -1186,7 +1605,7 @@ function OrderCard({ order, settings, onStatusChanged, onExpired }) {
             </div>
           )}
 
-          {/* ---- axis 2: messages. Writes nothing, ever. ---- */}
+          {/* ---- axis 3: messages. Writes nothing, ever. ---- */}
           {waNumber && (
             <>
               <div className="ad-axis">Message</div>
