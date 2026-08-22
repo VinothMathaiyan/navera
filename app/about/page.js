@@ -19,8 +19,8 @@
 //     story, and no health claim about protein or fat. All four were ruled out
 //     explicitly.
 //
-// SEE ALSO the "country cow" note on the What-goes-in section below — that one
-// is an open conflict with a locked business rule, not a settled decision.
+// The one line that is not the brief's is the opening of "What goes in" — see
+// the note on that section below. Everything else is exactly as supplied.
 
 import Link from "next/link";
 import { rpc } from "../../lib/db";
@@ -33,7 +33,7 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   title: "About Navera — Fresh Paneer Prepared After Your Order",
   description:
-    "Country cow milk and fresh lemon. That is the whole list. No preservatives, no vinegar, no citric acid powder, no milk solids, no starch, no vegetable fat.",
+    "Milk from free-roaming cared cows, and fresh lemon. That is the whole list. No preservatives, no vinegar, no citric acid powder, no milk solids, no starch, no vegetable fat.",
 };
 
 const WA_FALLBACK = "919843327406";
@@ -71,20 +71,19 @@ export default async function AboutPage() {
         <h1>About Navera</h1>
         <p className="about-lede">Fresh paneer, prepared after your order.</p>
 
-        {/* "Country cow milk" is the founder's wording, supplied verbatim, and
-            it CONTRADICTS a locked business rule: the sourcing claim was
-            changed on 2026-08-13 to "From free-roaming cared cows, around
-            100 km away from Chennai." and CLAUDE.md records "do not
-            reintroduce 'country cow'". It is left exactly as written rather
-            than silently resolved — see the handover note. The approved
-            wording appears further down this same page, under "Where the milk
-            comes from", which is what makes this look like a slip rather than
-            a reversal. If it is a reversal, CLAUDE.md and the master spec both
-            need updating with it; if it is a slip, the fix is the two words
-            here and the same two in the meta description above. */}
+        {/* This opening line, and the meta description that echoes it, are the
+            ONE place the page departs from the copy as it was supplied. The
+            brief read "Country cow milk and fresh lemon", which the founder
+            confirmed on 2026-08-22 was a slip in the brief rather than a
+            reversal: the 2026-08-13 sourcing rule stands, and "country cow"
+            must not go back on the site. Corrected at their instruction.
+            Do not restore the original wording from the brief. */}
         <section aria-labelledby="about-what">
           <h2 id="about-what">What goes in</h2>
-          <p>Country cow milk and fresh lemon. That is the whole list.</p>
+          <p>
+            Milk from free-roaming cared cows, and fresh lemon. That is the
+            whole list.
+          </p>
           <p>
             No preservatives. No vinegar. No citric acid powder. No milk solids,
             no starch, no vegetable fat. Nothing that extends shelf life,

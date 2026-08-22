@@ -421,24 +421,25 @@ plus a valid mixed-pack order — all passed before this was trusted.
   fact that depends on it, so a Supabase blip must not surface an error to
   someone who came to find out what goes in the paneer.
   - **The copy is the founder's, verbatim, and was diffed word-for-word against
-    what was supplied.** The only text on the page that is not theirs is the
-    footer's "Order fresh paneer" back-link. Do not embellish it, do not add
-    sections, and do not add: a refrigeration or cold-chain claim (paneer does
-    need cold storage between packing and delivery, so any such line would be
-    false), an adulteration statistic, a founder name/bio/photo/mission/
-    founding story, or a health claim about protein or fat. All were ruled out
-    explicitly.
-  - **UNRESOLVED CONFLICT, raised with the founder and not silently fixed: the
-    "What goes in" section opens "Country cow milk and fresh lemon", and the
-    meta description repeats it.** That contradicts the 2026-08-13 locked
-    sourcing rule ("do not reintroduce 'country cow'"). The approved wording —
-    "From free-roaming cared cows, around 100 km away from Chennai." — appears
-    further down the same page, under "Where the milk comes from", which is
-    what makes this look like a slip rather than a reversal. It was left
-    exactly as written because the copy was given as exact. **Settle it before
-    launch**: if it is a slip, the fix is two words in `app/about/page.js` and
-    the same two in its `metadata.description`; if it is a reversal, this file
-    and the master spec both need updating with it.
+    what was supplied**, with the single exception recorded in the next bullet.
+    The only other text on the page that is not theirs is the footer's "Order
+    fresh paneer" back-link. Do not embellish it, do not add sections, and do
+    not add: a refrigeration or cold-chain claim (paneer does need cold storage
+    between packing and delivery, so any such line would be false), an
+    adulteration statistic, a founder name/bio/photo/mission/founding story, or
+    a health claim about protein or fat. All were ruled out explicitly.
+  - **The "What goes in" opening line was corrected, and the 2026-08-13
+    sourcing rule stands.** The brief read "Country cow milk and fresh lemon",
+    which contradicts that rule ("do not reintroduce 'country cow'"). It was
+    built exactly as written and raised rather than silently fixed; the founder
+    confirmed on 2026-08-22 that it was **a slip in the brief, not a
+    reversal**, and it now reads "Milk from free-roaming cared cows, and fresh
+    lemon. That is the whole list." The `metadata.description` was changed to
+    match, since it quotes the same line. The approved sourcing wording further
+    down the page, under "Where the milk comes from", was already correct and
+    is untouched. **Nothing about the locked rule changed** — no update was
+    needed here or in the master spec beyond this record. Do not restore the
+    brief's original wording.
   - **No top nav, by decision.** Navigation is two text links and nothing else:
     `.footlink` in the order page's footer beside the licence line, and the
     same class on /about pointing back at `/`. A nav bar above the packs would
