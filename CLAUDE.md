@@ -411,6 +411,60 @@ plus a valid mixed-pack order — all passed before this was trusted.
   - Both test orders and the test customer were deleted afterwards so the milk
     forecast stays honest. **`order_reference_seq` now sits at 15**, so the
     next real order is NAV-016 — the gap is testing, not lost orders.
+- **2026-08-22 — the About page (`app/about/page.js`), on the branch
+  `claude/naverafresh-about-page-fxsabd` and DELIBERATELY NOT MERGED.** Built
+  to be read before launch, at the founder's instruction — no PR, no merge,
+  launching after the first real customer orders come through. A server
+  component of pure prose: no client component under it, no state, and the
+  whole page renders with JavaScript disabled. The only database read is the
+  WhatsApp number, wrapped in a try/catch that falls back — the page states no
+  fact that depends on it, so a Supabase blip must not surface an error to
+  someone who came to find out what goes in the paneer.
+  - **The copy is the founder's, verbatim, and was diffed word-for-word against
+    what was supplied.** The only text on the page that is not theirs is the
+    footer's "Order fresh paneer" back-link. Do not embellish it, do not add
+    sections, and do not add: a refrigeration or cold-chain claim (paneer does
+    need cold storage between packing and delivery, so any such line would be
+    false), an adulteration statistic, a founder name/bio/photo/mission/
+    founding story, or a health claim about protein or fat. All were ruled out
+    explicitly.
+  - **UNRESOLVED CONFLICT, raised with the founder and not silently fixed: the
+    "What goes in" section opens "Country cow milk and fresh lemon", and the
+    meta description repeats it.** That contradicts the 2026-08-13 locked
+    sourcing rule ("do not reintroduce 'country cow'"). The approved wording —
+    "From free-roaming cared cows, around 100 km away from Chennai." — appears
+    further down the same page, under "Where the milk comes from", which is
+    what makes this look like a slip rather than a reversal. It was left
+    exactly as written because the copy was given as exact. **Settle it before
+    launch**: if it is a slip, the fix is two words in `app/about/page.js` and
+    the same two in its `metadata.description`; if it is a reversal, this file
+    and the master spec both need updating with it.
+  - **No top nav, by decision.** Navigation is two text links and nothing else:
+    `.footlink` in the order page's footer beside the licence line, and the
+    same class on /about pointing back at `/`. A nav bar above the packs would
+    compete with the thing the order page exists to do.
+  - CSS is **purely additive** (102 lines, zero deletions), so the order page's
+    existing look is untouched. `.wrap`, `.foot`, `.wa`, `.masthead` and
+    `.notlisted` are reused as they are — do not fork them for this page. Every
+    size in the new `.about` block is one the site already used (h1 27px from
+    `.done .done-h`; h2 20px from `.step-head h2`, growing to 22px at 600px in
+    the same media query so the two pages step together; body 15.5px from
+    `.done .msg`). The one new value is `line-height: 1.6`, because this is the
+    site's only page with paragraphs to read rather than scan.
+  - `.foot-dot`, the separator between the licence number and the link, takes
+    `--muted` and **not** `--line`: the border grey measures 1.23:1 on cream,
+    which is invisible rather than subtle. Caught by the contrast sweep, not by
+    eye.
+  - Verified in real Chromium against a production build at **375 / 768 /
+    1280 px**: no horizontal scroll at any width, every tap target on /about at
+    or above 44px (the inline "WhatsApp us" link takes the `.notlisted`
+    treatment — height, never a box), all text/background pairs at or above
+    WCAG AA (lowest on /about 5.40:1), the column holding at 528px centred on
+    the wide screens, and both footer links actually navigating. The order page
+    was rendered against a **mock** `get_ordering_info` to reach its real
+    footer — this container has no egress to `supabase.co`, so without one the
+    order page falls back to its error branch and the footer under test never
+    renders. Worth knowing before concluding a footer change "didn't apply".
 - `.claude/launch.json` already carries a `navera-dev` config, so
   `preview_start` can run the dev server by that name. Note that `npm run
   build` and `next dev` share `.next/`: running a build while the dev server

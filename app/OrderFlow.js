@@ -758,7 +758,20 @@ export default function OrderFlow({ info, loadError }) {
             Questions? WhatsApp us
             <NewTabNote />
           </a>
-          <p className="fssai">FSSAI Lic. No. 22426358000260</p>
+          {/* The only route to /about, and deliberately the only one: this is
+              an ordering flow, and a top nav bar above the packs would compete
+              with the thing the page exists to do. The link sits beside the
+              licence line because that is where a reader already looks for who
+              we are. */}
+          <p className="fssai">
+            FSSAI Lic. No. 22426358000260
+            <span className="foot-dot" aria-hidden="true">
+              &middot;
+            </span>
+            <Link className="footlink" href="/about">
+              About Navera
+            </Link>
+          </p>
         </div>
       </div>
     </main>

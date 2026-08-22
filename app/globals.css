@@ -778,6 +778,104 @@ button, input, select { font: inherit; color: inherit; }
 }
 .foot .fssai { margin-top: 16px; font-size: 12px; color: var(--muted); }
 
+/* The footer's link out to /about, and /about's link back. There is no top nav
+   on this site by decision, so these two are the whole of its navigation.
+
+   `.footlink` takes the `.notlisted` / `.notyou` treatment and for the same
+   reason: it sits inline in a line of text, so it gets HEIGHT to reach the
+   44px target and never a box. Giving it padding and a border would make a
+   button of a link that belongs in a sentence — that is the rule the admin's
+   `.ad-editlink` settled, and it holds here. Because the licence line is 12px
+   and this is 13px, the link is also the taller of the two, which is what
+   stops the pair reading as one run-on string. */
+.footlink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 13px;
+  color: var(--green-soft);
+  text-decoration: underline;
+}
+/* Separator between the licence number and the link. aria-hidden in the markup
+   — a screen reader announcing "middle dot" between them adds nothing.
+   It takes --muted, the licence line's own colour, and NOT --line: the border
+   grey measures 1.23:1 on cream, which is invisible rather than subtle, and a
+   separator nobody can see is not separating anything. Being decorative buys
+   it no exemption here — everything on this site clears AA. */
+.foot-dot { margin: 0 7px; color: var(--muted); }
+/* On /about the link is alone on its own line rather than beside the licence
+   number, which that page carries up in "Who we are" instead. */
+.foot-nav { margin: 0; }
+
+/* ---------------- about ----------------
+
+   /about is the site's only prose page. The order page is entirely controls,
+   so there was no paragraph rhythm here to inherit — these rules are spacing
+   and measure and nothing else. Every colour, face and size below is either a
+   token or a size the order page already uses:
+
+     h1        27px green   — the same as `.done .done-h` on the confirmation
+     h2        20px green   — `.step-head h2`'s size, `.thread h3`'s colour,
+                              and it grows to 22px at 600px exactly as that
+                              rule does, so the two pages step together
+     lede      15.5px muted — `.done .msg`'s size in `.thread .why`'s grey
+     body      15.5px ink
+
+   That is what "the same site, not a sibling" means in practice: nothing here
+   introduces a value, only a place to put one. `.wrap`, `.foot`, `.masthead`
+   and `.notlisted` are reused untouched — do not fork them for this page. */
+
+.about { padding-top: 26px; }
+
+.about h1 {
+  font-size: 27px;
+  line-height: 1.2;
+  color: var(--green);
+}
+.about-lede {
+  margin: 8px 0 0;
+  font-size: 15.5px;
+  color: var(--muted);
+}
+
+/* 30px is `.step`'s rhythm between sections, so the vertical beat of this page
+   matches the order page's scroll. */
+.about section { margin-top: 30px; }
+.about h2 {
+  font-size: 20px;
+  line-height: 1.3;
+  color: var(--green);
+}
+
+/* 1.6 rather than the body 1.5: this is the only place on the site with
+   multi-line paragraphs to read rather than scan, and the extra leading is
+   what makes a 15.5px measure comfortable at 375px. */
+.about p {
+  margin: 11px 0 0;
+  font-size: 15.5px;
+  line-height: 1.6;
+}
+.about h2 + p { margin-top: 9px; }
+
+/* The licence line sits in the body copy here, not in the footer, so it needs
+   its own type — the same problem `.my-fssai` solves on the private page. */
+.about-fssai {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* The closing note is the footer's own voice, so it takes the footer note's
+   type rather than the body's. */
+.about-note {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+/* The inline WhatsApp link is 44px tall inside a 13.5px line. Pulling the line
+   box back in keeps the note from sitting in a band of its own air. */
+.about-wa { font-size: 13.5px; margin: -12px 0; }
+
 /* ---------------- confirmation / the private page ----------------
 
    The confirmation used to be React state on the order page; it now lives at
@@ -980,6 +1078,10 @@ button, input, select { font: inherit; color: inherit; }
   .masthead .lede { font-size: 29px; }
   .packs { gap: 13px; }
   .step-head h2 { font-size: 22px; }
+  /* Steps together with `.step-head h2` above — the two pages must not diverge
+     in heading size the moment the column widens. */
+  .about h2 { font-size: 22px; }
+  .about h1 { font-size: 30px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
