@@ -536,6 +536,21 @@
 }
 .ad-refresh:disabled { opacity: 0.5; cursor: default; }
 
+/* Two buttons where the orders-head used to hold just one (Refresh) — All
+   Orders adds Download CSV beside it. .ad-orders-head's own flex still puts
+   this pair on the opposite end from the heading. */
+.ad-orders-actions { display: flex; gap: 8px; }
+
+/* A second line inside a table cell — a customer's phone under their name, or
+   "sample" under a status — kept off the main line's font-weight and colour
+   so it reads as a footnote to the cell, not a second fact of equal weight. */
+.ad-table-sub {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
 .ad-empty {
   margin-top: 12px;
   font-size: 14.5px;
