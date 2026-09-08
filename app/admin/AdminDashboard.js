@@ -14,6 +14,7 @@ import {
 import Settings from "./Settings";
 import Areas from "./Areas";
 import Production from "./Production";
+import AllOrders from "./AllOrders";
 import {
   nextDeliveryDates,
   nextStatus,
@@ -91,7 +92,7 @@ function upcomingDeliveryDates(deliveryDays, fromISO, count = 8) {
   return out;
 }
 
-const SOURCE_LABEL = {
+export const SOURCE_LABEL = {
   website: "Website",
   whatsapp: "WhatsApp",
   instagram: "Instagram",
@@ -125,6 +126,16 @@ const ORDER_SELECT =
 const MONEY_SELECT =
   "id,reference,status,order_type,payment_status,total,subtotal,delivery_date," +
   "items:order_items(quantity,weight_grams,unit_price)";
+
+/* All Orders is the other all-time read: every order ever placed, independent
+   of the Dashboard's one chosen delivery date. Unlike MONEY_SELECT it needs
+   the customer join and created_at, because the point of this tab is "who,
+   what, when" at a glance rather than a total. */
+const ALL_ORDERS_SELECT =
+  "id,reference,delivery_date,created_at,status,source,order_type," +
+  "payment_status,payment_method,total," +
+  "customer:customers(name,phone,flat,area:delivery_areas(name))," +
+  "items:order_items(quantity,weight_grams)";
 
 /* Samples are given as 100g. That pack is a real products row but is
    is_active = false, so it is invisible to get_ordering_info, refused by
@@ -288,11 +299,32 @@ export default function AdminDashboard() {
     loadMoney();
   }, [loadMoney]);
 
-  // A status or payment change can affect any of the three lists, so all three
+  /* ------------------------------------------------ all orders, all time */
+
+  const [allOrders, setAllOrders] = useState([]);
+
+  const loadAllOrders = useCallback(async () => {
+    if (!session) return;
+    try {
+      const rows = await db(
+        `orders?select=${ALL_ORDERS_SELECT}&order=delivery_date.desc,created_at.desc`
+      );
+      setAllOrders(rows ?? []);
+    } catch (e) {
+      if (e instanceof SessionExpired) dropToLogin();
+      else setError(e.message);
+    }
+  }, [session, dropToLogin]);
+
+  useEffect(() => {
+    loadAllOrders();
+  }, [loadAllOrders]);
+
+  // A status or payment change can affect any of the four lists, so all four
   // are refreshed together rather than leaving one showing a stale badge.
   const reloadAll = useCallback(async () => {
-    await Promise.all([loadOrders(), loadWeek(), loadMoney()]);
-  }, [loadOrders, loadWeek, loadMoney]);
+    await Promise.all([loadOrders(), loadWeek(), loadMoney(), loadAllOrders()]);
+  }, [loadOrders, loadWeek, loadMoney, loadAllOrders]);
 
   /* ------------------------------------------------ forecast */
 
@@ -375,6 +407,14 @@ export default function AdminDashboard() {
         <button
           type="button"
           className="ad-tab"
+          aria-pressed={view === "all"}
+          onClick={() => setView("all")}
+        >
+          All Orders
+        </button>
+        <button
+          type="button"
+          className="ad-tab"
           aria-pressed={view === "settings"}
           onClick={() => setView("settings")}
         >
@@ -409,6 +449,16 @@ export default function AdminDashboard() {
             today={today}
             onChanged={reloadAll}
             onExpired={dropToLogin}
+          />
+        </div>
+      ) : view === "all" ? (
+        <div className="ad-wrap">
+          {error && <div className="ad-err">{error}</div>}
+          <AllOrders
+            orders={allOrders}
+            settings={settings}
+            loading={loading}
+            onRefresh={reloadAll}
           />
         </div>
       ) : (
