@@ -253,6 +253,12 @@
   font-size: 15px;
 }
 
+/* All Orders' From/to range reuses .ad-anydate's label+input look, just with
+   a second pair and a Clear button. flex-wrap so "From [date] to [date]
+   Clear dates" drops to two lines on a narrow phone instead of squeezing. */
+.ad-daterange { flex-wrap: wrap; row-gap: 8px; }
+.ad-daterange .ad-filter { min-height: 36px; padding: 6px 12px; }
+
 /* ---------------- forecast ---------------- */
 
 .ad-forecast {
