@@ -14,6 +14,7 @@
 import { useMemo, useState } from "react";
 import { STATUS_LABEL } from "./production-summary";
 import { SOURCE_LABEL } from "./AdminDashboard";
+import { computeMoney } from "./payments";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -41,6 +42,18 @@ function placedDate(ts, timezone) {
 }
 
 const rupees = (n) => "₹" + Number(n).toLocaleString("en-IN");
+
+// "Today" as the business reckons it, not as the laptop's clock does — the
+// same rule AdminDashboard.js applies everywhere else. Needed here only for
+// computeMoney's "how many days overdue" maths.
+function todayISO(timezone) {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
+  } catch {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+}
 
 // 'cancelled' listed alongside the flow here, unlike STATUS_FLOW in
 // production-summary.js — this screen is a record of everything that
@@ -164,6 +177,13 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
 
   const hasRange = fromDate || toDate;
 
+  // Money — moved here from Dashboard. Deliberately computed from `list`
+  // (every order, unfiltered) rather than `shown`: it is an all-time figure
+  // by definition, and must not quietly change meaning depending on which
+  // status chip or date range happens to be selected above.
+  const today = todayISO(timezone);
+  const money = useMemo(() => computeMoney(list, today), [list, today]);
+
   function exportCSV() {
     const stamp = new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
     const range = hasRange ? `${fromDate || "start"}_to_${toDate || "now"}` : "all-dates";
@@ -188,6 +208,86 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
           </button>
         </div>
       </div>
+
+      {/* money — all time, deliberately not scoped to the filters below */}
+      <section className="ad-money">
+        <div className="ad-money-head">
+          <h2 className="ad-h">Money</h2>
+          <span className="ad-money-scope">all time</span>
+        </div>
+
+        {/* What is owed. The age is counted from the delivery day, so an
+            order for a day that hasn't arrived yet is waiting, not late. */}
+        <div className="ad-money-row">
+          <div className="ad-money-fig is-wide">
+            <div className="n">{rupees(money.outstanding)}</div>
+            <div className="l">outstanding</div>
+          </div>
+          <div className="ad-money-fig">
+            <div className="n">{money.pendingCount}</div>
+            <div className="l">order{money.pendingCount === 1 ? "" : "s"} unpaid</div>
+          </div>
+          <div className="ad-money-fig">
+            <div className="n">
+              {money.oldestPending ? money.oldestPending.days : "—"}
+            </div>
+            <div className="l">
+              {money.oldestPending
+                ? `day${money.oldestPending.days === 1 ? "" : "s"} — oldest (${money.oldestPending.reference})`
+                : "nothing overdue"}
+            </div>
+          </div>
+        </div>
+
+        {/* Revenue. Every figure here excludes samples, and the blended
+            price is the reason: dividing sales revenue by paneer that
+            includes giveaways makes every kilo look cheaper than it sold
+            for. Samples are an acquisition cost and get their own line. */}
+        <div className="ad-money-row">
+          <div className="ad-money-fig">
+            <div className="n">{rupees(money.revenue)}</div>
+            <div className="l">revenue collected</div>
+          </div>
+          <div className="ad-money-fig">
+            <div className="n">
+              {money.kgSold.toLocaleString("en-IN", { maximumFractionDigits: 2 })} kg
+            </div>
+            <div className="l">paneer sold</div>
+          </div>
+          <div className="ad-money-fig">
+            <div className="n">
+              {money.blendedPerKg === null
+                ? "—"
+                : rupees(Math.round(money.blendedPerKg))}
+            </div>
+            <div className="l">blended per kg</div>
+          </div>
+        </div>
+        <div className="ad-money-note">
+          Blended price is what every sale was billed ÷ paneer sold — both
+          halves count the same orders, paid or not, so it stays put as
+          money comes in. Samples are in neither: free paneer in the bottom
+          half would understate every kilo you actually sold.
+        </div>
+
+        {/* Kept visually apart from the revenue block above, because the one
+            thing this figure must never do is read as income. */}
+        <div className="ad-money-samples">
+          <div className="ad-money-samples-head">Samples given</div>
+          <div className="ad-money-samples-body">
+            <strong>{money.samplesGiven}</strong> sample
+            {money.samplesGiven === 1 ? "" : "s"} ·{" "}
+            {(money.sampleGrams / 1000).toLocaleString("en-IN", {
+              maximumFractionDigits: 2,
+            })}{" "}
+            kg · worth {rupees(money.sampleValue)}
+          </div>
+          <div className="ad-money-samples-foot">
+            An acquisition cost, not revenue. Never added to the figures
+            above.
+          </div>
+        </div>
+      </section>
 
       <p className="ad-note">
         Every order ever placed, across every delivery date — the record of
