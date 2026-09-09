@@ -129,24 +129,45 @@ function download(filename, text) {
 
 export default function AllOrders({ orders, settings, loading, onRefresh }) {
   const [statusFilter, setStatusFilter] = useState("all");
+  // Delivery-date range, not placed-date — this mirrors the Dashboard tab's
+  // own date picker, just widened from "one day" to "from / to". Empty
+  // string means that end of the range is open.
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const timezone = settings?.timezone ?? "Asia/Kolkata";
   const list = orders ?? [];
 
+  const inRange = useMemo(() => {
+    return (o) =>
+      (!fromDate || o.delivery_date >= fromDate) && (!toDate || o.delivery_date <= toDate);
+  }, [fromDate, toDate]);
+
+  // Counts are computed after the date range but before the status filter,
+  // so the chips always show "how many of each status in the dates I've
+  // picked" rather than a stale all-time count.
+  const dateFiltered = useMemo(() => list.filter(inRange), [list, inRange]);
+
   const counts = useMemo(() => {
-    const c = { all: list.length };
+    const c = { all: dateFiltered.length };
     for (const s of STATUS_ORDER) c[s] = 0;
-    for (const o of list) c[o.status] = (c[o.status] ?? 0) + 1;
+    for (const o of dateFiltered) c[o.status] = (c[o.status] ?? 0) + 1;
     return c;
-  }, [list]);
+  }, [dateFiltered]);
 
   const shown = useMemo(
-    () => (statusFilter === "all" ? list : list.filter((o) => o.status === statusFilter)),
-    [list, statusFilter]
+    () =>
+      statusFilter === "all"
+        ? dateFiltered
+        : dateFiltered.filter((o) => o.status === statusFilter),
+    [dateFiltered, statusFilter]
   );
+
+  const hasRange = fromDate || toDate;
 
   function exportCSV() {
     const stamp = new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
-    download(`navera-orders-${statusFilter}-${stamp}.csv`, toCSV(shown, timezone));
+    const range = hasRange ? `${fromDate || "start"}_to_${toDate || "now"}` : "all-dates";
+    download(`navera-orders-${statusFilter}-${range}-${stamp}.csv`, toCSV(shown, timezone));
   }
 
   return (
@@ -174,6 +195,30 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
         mark a payment from the Dashboard tab; this one only reads.
       </p>
 
+      <div className="ad-anydate ad-daterange">
+        <label htmlFor="from-date">From</label>
+        <input
+          id="from-date"
+          type="date"
+          value={fromDate}
+          max={toDate || undefined}
+          onChange={(e) => setFromDate(e.target.value)}
+        />
+        <label htmlFor="to-date">to</label>
+        <input
+          id="to-date"
+          type="date"
+          value={toDate}
+          min={fromDate || undefined}
+          onChange={(e) => setToDate(e.target.value)}
+        />
+        {hasRange && (
+          <button type="button" className="ad-filter" onClick={() => { setFromDate(""); setToDate(""); }}>
+            Clear dates
+          </button>
+        )}
+      </div>
+
       <div className="ad-filters" role="group" aria-label="Filter by status">
         <button
           type="button"
@@ -197,12 +242,14 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
       </div>
 
       {shown.length === 0 ? (
-        <div className="ad-empty">No orders match this filter.</div>
+        <div className="ad-empty">
+          No orders match this filter{hasRange ? " and date range" : ""}.
+        </div>
       ) : (
         <div className="ad-tablewrap">
           <table className="ad-table">
             <caption className="sr-only">
-              Every order, across all delivery dates, filtered by status.
+              Orders filtered by status and delivery date range.
             </caption>
             <thead>
               <tr>
