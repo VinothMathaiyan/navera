@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { currentSession, db, signIn, signOut, SessionExpired } from "../../lib/admin";
 import { computeForecast } from "./forecast";
 import {
-  computeMoney,
   isPending,
   isSample,
   METHOD_LABEL,
@@ -120,22 +119,16 @@ const ORDER_SELECT =
   "customer:customers(id,name,phone,flat,area:delivery_areas(name))," +
   "items:order_items(quantity,weight_grams,unit_price)";
 
-/* The money panel is all-time, not date-scoped: outstanding money does not
-   belong to the delivery day you happen to be looking at. Its own read, kept
-   as thin as the maths allows — no customer join, no notes, no tokens. */
-const MONEY_SELECT =
-  "id,reference,status,order_type,payment_status,total,subtotal,delivery_date," +
-  "items:order_items(quantity,weight_grams,unit_price)";
-
 /* All Orders is the other all-time read: every order ever placed, independent
-   of the Dashboard's one chosen delivery date. Unlike MONEY_SELECT it needs
-   the customer join and created_at, because the point of this tab is "who,
-   what, when" at a glance rather than a total. */
+   of the Dashboard's one chosen delivery date. It also now feeds the Money
+   panel (moved here from Dashboard — money is an all-time figure, so this is
+   its natural home), which is why unit_price is asked for even though the
+   table itself never shows it: computeMoney needs it for sample value. */
 const ALL_ORDERS_SELECT =
   "id,reference,delivery_date,created_at,status,source,order_type," +
-  "payment_status,payment_method,total," +
+  "payment_status,payment_method,total,subtotal," +
   "customer:customers(name,phone,flat,area:delivery_areas(name))," +
-  "items:order_items(quantity,weight_grams)";
+  "items:order_items(quantity,weight_grams,unit_price)";
 
 /* Samples are given as 100g. That pack is a real products row but is
    is_active = false, so it is invisible to get_ordering_info, refused by
@@ -280,27 +273,10 @@ export default function AdminDashboard() {
     loadWeek();
   }, [loadWeek]);
 
-  /* ------------------------------------------------ money, all time */
-
-  const [moneyOrders, setMoneyOrders] = useState([]);
-
-  const loadMoney = useCallback(async () => {
-    if (!session) return;
-    try {
-      const rows = await db(`orders?select=${MONEY_SELECT}&order=delivery_date.asc`);
-      setMoneyOrders(rows ?? []);
-    } catch (e) {
-      if (e instanceof SessionExpired) dropToLogin();
-      else setError(e.message);
-    }
-  }, [session, dropToLogin]);
-
-  useEffect(() => {
-    loadMoney();
-  }, [loadMoney]);
-
   /* ------------------------------------------------ all orders, all time */
 
+  // Also the Money panel's data source now — see the comment on
+  // ALL_ORDERS_SELECT above for why one read serves both.
   const [allOrders, setAllOrders] = useState([]);
 
   const loadAllOrders = useCallback(async () => {
@@ -320,11 +296,11 @@ export default function AdminDashboard() {
     loadAllOrders();
   }, [loadAllOrders]);
 
-  // A status or payment change can affect any of the four lists, so all four
-  // are refreshed together rather than leaving one showing a stale badge.
+  // A status or payment change can affect any of these lists, so all are
+  // refreshed together rather than leaving one showing a stale badge.
   const reloadAll = useCallback(async () => {
-    await Promise.all([loadOrders(), loadWeek(), loadMoney(), loadAllOrders()]);
-  }, [loadOrders, loadWeek, loadMoney, loadAllOrders]);
+    await Promise.all([loadOrders(), loadWeek(), loadAllOrders()]);
+  }, [loadOrders, loadWeek, loadAllOrders]);
 
   /* ------------------------------------------------ forecast */
 
@@ -347,12 +323,6 @@ export default function AdminDashboard() {
         ? orders.filter((o) => isPending(o) && o.status !== "cancelled")
         : orders,
     [orders, unpaidOnly]
-  );
-
-  const moneyToday = todayISO(settings?.timezone ?? "Asia/Kolkata");
-  const money = useMemo(
-    () => computeMoney(moneyOrders, moneyToday),
-    [moneyOrders, moneyToday]
   );
 
   /* ------------------------------------------------ render */
@@ -567,86 +537,6 @@ export default function AdminDashboard() {
             {forecast.cancelled > 0 && (
               <> · {forecast.cancelled} cancelled, not counted</>
             )}
-          </div>
-        </section>
-
-        {/* money — all time, deliberately not scoped to the chosen date */}
-        <section className="ad-money">
-          <div className="ad-money-head">
-            <h2 className="ad-h">Money</h2>
-            <span className="ad-money-scope">all time</span>
-          </div>
-
-          {/* What is owed. The age is counted from the delivery day, so an
-              order for a day that hasn't arrived yet is waiting, not late. */}
-          <div className="ad-money-row">
-            <div className="ad-money-fig is-wide">
-              <div className="n">{rupees(money.outstanding)}</div>
-              <div className="l">outstanding</div>
-            </div>
-            <div className="ad-money-fig">
-              <div className="n">{money.pendingCount}</div>
-              <div className="l">order{money.pendingCount === 1 ? "" : "s"} unpaid</div>
-            </div>
-            <div className="ad-money-fig">
-              <div className="n">
-                {money.oldestPending ? money.oldestPending.days : "—"}
-              </div>
-              <div className="l">
-                {money.oldestPending
-                  ? `day${money.oldestPending.days === 1 ? "" : "s"} — oldest (${money.oldestPending.reference})`
-                  : "nothing overdue"}
-              </div>
-            </div>
-          </div>
-
-          {/* Revenue. Every figure here excludes samples, and the blended
-              price is the reason: dividing sales revenue by paneer that
-              includes giveaways makes every kilo look cheaper than it sold
-              for. Samples are an acquisition cost and get their own line. */}
-          <div className="ad-money-row">
-            <div className="ad-money-fig">
-              <div className="n">{rupees(money.revenue)}</div>
-              <div className="l">revenue collected</div>
-            </div>
-            <div className="ad-money-fig">
-              <div className="n">
-                {money.kgSold.toLocaleString("en-IN", { maximumFractionDigits: 2 })} kg
-              </div>
-              <div className="l">paneer sold</div>
-            </div>
-            <div className="ad-money-fig">
-              <div className="n">
-                {money.blendedPerKg === null
-                  ? "—"
-                  : rupees(Math.round(money.blendedPerKg))}
-              </div>
-              <div className="l">blended per kg</div>
-            </div>
-          </div>
-          <div className="ad-money-note">
-            Blended price is what every sale was billed ÷ paneer sold — both
-            halves count the same orders, paid or not, so it stays put as
-            money comes in. Samples are in neither: free paneer in the bottom
-            half would understate every kilo you actually sold.
-          </div>
-
-          {/* Kept visually apart from the revenue block above, because the one
-              thing this figure must never do is read as income. */}
-          <div className="ad-money-samples">
-            <div className="ad-money-samples-head">Samples given</div>
-            <div className="ad-money-samples-body">
-              <strong>{money.samplesGiven}</strong> sample
-              {money.samplesGiven === 1 ? "" : "s"} ·{" "}
-              {(money.sampleGrams / 1000).toLocaleString("en-IN", {
-                maximumFractionDigits: 2,
-              })}{" "}
-              kg · worth {rupees(money.sampleValue)}
-            </div>
-            <div className="ad-money-samples-foot">
-              An acquisition cost, not revenue. Never added to the figures
-              above.
-            </div>
           </div>
         </section>
 
