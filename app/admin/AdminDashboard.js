@@ -11,6 +11,7 @@ import {
   pendingDays,
 } from "./payments";
 import Settings from "./Settings";
+import Products from "./Products";
 import Areas from "./Areas";
 import Production from "./Production";
 import AllOrders from "./AllOrders";
