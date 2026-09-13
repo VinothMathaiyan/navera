@@ -406,8 +406,11 @@ export default function AdminDashboard() {
             // waiting for a reload to catch up with what was just saved.
             onSaved={setSettings}
           />
-          {/* Communities live with the other configuration rather than in a
-              fourth tab — four tabs do not fit a 360px handset comfortably. */}
+          {/* Pack prices and Communities live with the other configuration
+              rather than in their own tabs — four-plus tabs do not fit a
+              360px handset comfortably. loadReference reloads products too,
+              so the manual-entry form picks up a new price immediately. */}
+          <Products onExpired={dropToLogin} onProductsChanged={loadReference} />
           <Areas onExpired={dropToLogin} onAreasChanged={loadReference} />
         </div>
       ) : view === "production" ? (
