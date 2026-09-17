@@ -118,7 +118,10 @@ const ORDER_SELECT =
   "time_preference,address_note,created_at," +
   "order_type,payment_status,payment_method,paid_at," +
   "customer:customers(id,name,phone,flat,area:delivery_areas(name))," +
-  "items:order_items(quantity,weight_grams,unit_price)";
+  // product_id travels with each item now, purely so EditOrder can match a
+  // line back to a row in `products` (or to the sample pack) without
+  // guessing from weight_grams, which two products could someday share.
+  "items:order_items(id,product_id,quantity,weight_grams,unit_price)";
 
 /* All Orders is the other all-time read: every order ever placed, independent
    of the Dashboard's one chosen delivery date. It also now feeds the Money
@@ -153,6 +156,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [entryOpen, setEntryOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState(null);
   const [view, setView] = useState("dashboard");
   const [unpaidOnly, setUnpaidOnly] = useState(false);
 
@@ -624,11 +628,28 @@ export default function AdminDashboard() {
                 today={today}
                 onStatusChanged={reloadAll}
                 onExpired={dropToLogin}
+                onEdit={setEditingOrder}
               />
             ))}
           </div>
         </section>
       </div>
+      )}
+
+      {editingOrder && (
+        <EditOrder
+          order={editingOrder}
+          products={products}
+          sampleProduct={sampleProduct}
+          settings={settings}
+          dates={dates}
+          onClose={() => setEditingOrder(null)}
+          onSaved={async () => {
+            setEditingOrder(null);
+            await reloadAll();
+          }}
+          onExpired={dropToLogin}
+        />
       )}
     </main>
   );
@@ -690,6 +711,60 @@ function Login({ onSignedIn }) {
         </button>
       </form>
     </main>
+  );
+}
+
+/* ================================================== date field */
+
+/* The quick-pick buttons only ever list delivery days from today forward —
+   upcomingDeliveryDates has no reason to look backward, since a new WhatsApp
+   order is normally for tomorrow or the next delivery day. That leaves no way
+   to enter an order for a day that has already passed, which is exactly the
+   case when Gowri forgot to log one at the time. "A different date" swaps the
+   button row for a plain date input with no min/max, so any past or future
+   date can be typed in — used here and in EditOrder. */
+function DateField({ dates, value, onChange, label = "Delivery date" }) {
+  const [custom, setCustom] = useState(() => Boolean(value) && !dates.includes(value));
+
+  return (
+    <>
+      <div className="ad-sub">{label}</div>
+      {!custom ? (
+        <>
+          <div className="ad-dates">
+            {dates.map((iso) => (
+              <button
+                key={iso}
+                type="button"
+                className="ad-date"
+                aria-pressed={value === iso}
+                onClick={() => onChange(iso)}
+              >
+                <span className="dow">{DOW[parts(iso).getDay()]}</span>
+                <span className="dnum">{parts(iso).getDate()}</span>
+                <span className="mon">{MON[parts(iso).getMonth()]}</span>
+              </button>
+            ))}
+          </div>
+          <button type="button" className="ad-editlink" onClick={() => setCustom(true)}>
+            A different date, including a past one
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="field">
+            <input
+              type="date"
+              value={value ?? ""}
+              onChange={(e) => onChange(e.target.value)}
+            />
+          </div>
+          <button type="button" className="ad-editlink" onClick={() => setCustom(false)}>
+            Choose from the usual delivery days instead
+          </button>
+        </>
+      )}
+    </>
   );
 }
 
@@ -1114,22 +1189,7 @@ function ManualEntry({
               </div>
             ))}
 
-          <div className="ad-sub">Delivery date</div>
-          <div className="ad-dates">
-            {dates.map((iso) => (
-              <button
-                key={iso}
-                type="button"
-                className="ad-date"
-                aria-pressed={date === iso}
-                onClick={() => setDate(iso)}
-              >
-                <span className="dow">{DOW[parts(iso).getDay()]}</span>
-                <span className="dnum">{parts(iso).getDate()}</span>
-                <span className="mon">{MON[parts(iso).getMonth()]}</span>
-              </button>
-            ))}
-          </div>
+          <DateField dates={dates} value={date} onChange={setDate} />
 
           {/* The Morning / Evening / No preference control was removed on
               2026-08-16. It was the last thing writing orders.time_preference,
@@ -1203,7 +1263,7 @@ function ManualEntry({
 
    Advancing the status OFFERS the matching message and never sends it. §20 and
    §21 both put a human in that loop deliberately: Gowri taps, reviews, sends. */
-function OrderCard({ order, settings, today, onStatusChanged, onExpired }) {
+function OrderCard({ order, settings, today, onStatusChanged, onExpired, onEdit }) {
   const customer = order.customer ?? {};
   const waNumber = customer.phone ? `91${customer.phone}` : null;
   const firstName = (customer.name ?? "").trim().split(" ")[0] || "there";
@@ -1409,6 +1469,21 @@ function OrderCard({ order, settings, today, onStatusChanged, onExpired }) {
 
       {order.notes && <div className="ad-order-note">{order.notes}</div>}
 
+      {/* Fixes a wrong quantity, a sale that should have been a sample, or a
+          delivery date entered before this order existed to hold it — the
+          three gaps that used to mean asking Claude to patch the row by
+          hand. Shown whatever the status: a cancelled order can still have
+          the wrong pack count on it. */}
+      {onEdit && (
+        <button
+          type="button"
+          className="ad-editlink"
+          onClick={() => onEdit(order)}
+        >
+          Edit order
+        </button>
+      )}
+
       {error && <div className="ad-err">{error}</div>}
 
       {order.status === "cancelled" ? (
@@ -1585,8 +1660,9 @@ function OrderCard({ order, settings, today, onStatusChanged, onExpired }) {
           {confirmCancel ? (
             <div className="ad-confirm" role="alert">
               <span>
-                Cancel {order.reference}? It leaves the production maths
-                entirely.
+                Cancel {order.reference}? The order stays on record — nothing
+                is deleted — but it stops counting toward tomorrow&apos;s milk
+                and paneer. You can restore it any time.
               </span>
               <div className="ad-confirm-actions">
                 <button
@@ -1618,5 +1694,260 @@ function OrderCard({ order, settings, today, onStatusChanged, onExpired }) {
         </>
       )}
     </article>
+  );
+}
+
+/* ================================================== edit order */
+
+/* Closes the one gap Add-a-WhatsApp-order always had: once an order existed
+   there was no way to touch it again. A miscounted pack, a sale that should
+   have been a free sample, a delivery date entered before the order existed
+   to hold it — all three used to mean asking Claude to patch the row by
+   hand. This is the same shape as ManualEntry (type switch, pack steppers,
+   DateField) but writing PATCH/DELETE/POST against an order that already
+   exists rather than POSTing a new one.
+
+   Money and payment_status follow the same rule ManualEntry uses when it
+   creates a sample: order_type decides them, never the other way round. The
+   one extra case here — ManualEntry never has to face it — is an order that
+   was a sample and is being turned back into a sale. There is nothing to
+   preserve from "not_applicable", so it becomes 'pending'; anything already
+   paid or pending when only the pack count changes is left exactly as the
+   Payment control on the card set it. */
+function EditOrder({ order, products, sampleProduct, settings, dates, onClose, onSaved, onExpired }) {
+  const startingType = order.order_type === "sample" ? "sample" : "sale";
+  const [orderType, setOrderType] = useState(startingType);
+  const isSampleEntry = orderType === "sample" && sampleProduct;
+
+  const [date, setDate] = useState(order.delivery_date);
+
+  // Seed the steppers from the order's own items, matched by product_id —
+  // not by weight_grams, which two products could someday share. Anything
+  // that doesn't match a current product (a discontinued pack) is dropped
+  // from the stepper but not from the order until Save is pressed.
+  const initialQty = useMemo(() => {
+    const q = {};
+    for (const item of order.items ?? []) {
+      if (!item.product_id) continue;
+      q[item.product_id] = (q[item.product_id] ?? 0) + Number(item.quantity ?? 0);
+    }
+    return q;
+  }, [order.items]);
+  const [qty, setQty] = useState(initialQty);
+
+  const initialSampleQty = useMemo(() => {
+    if (!sampleProduct) return 1;
+    const match = (order.items ?? []).find((i) => i.product_id === sampleProduct.id);
+    return match ? Number(match.quantity) || 1 : 1;
+  }, [order.items, sampleProduct]);
+  const [sampleQty, setSampleQty] = useState(initialSampleQty);
+
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const lines = useMemo(() => {
+    if (isSampleEntry) {
+      return [
+        {
+          product_id: sampleProduct.id,
+          quantity: sampleQty,
+          unit_price: Number(sampleProduct.price),
+          weight_grams: sampleProduct.weight_grams,
+        },
+      ];
+    }
+    return products
+      .filter((p) => (qty[p.id] ?? 0) > 0)
+      .map((p) => ({
+        product_id: p.id,
+        quantity: qty[p.id],
+        unit_price: Number(p.price),
+        weight_grams: p.weight_grams,
+      }));
+  }, [products, qty, isSampleEntry, sampleProduct, sampleQty]);
+
+  const subtotal = lines.reduce((sum, l) => sum + l.unit_price * l.quantity, 0);
+  const deliveryCharge = isSampleEntry ? 0 : Number(settings?.delivery_charge ?? 0);
+  const total = isSampleEntry ? 0 : subtotal + deliveryCharge;
+
+  const ready = lines.length > 0 && date && (orderType === "sale" || Boolean(sampleProduct));
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      // payment_status: only touched when the type switch demands it. A
+      // plain quantity fix leaves whatever the Payment control already set.
+      let payment_status = order.payment_status;
+      if (orderType === "sample") {
+        payment_status = "not_applicable";
+      } else if (order.order_type === "sample") {
+        payment_status = "pending";
+      }
+
+      await db(`orders?id=eq.${order.id}`, {
+        method: "PATCH",
+        body: {
+          delivery_date: date,
+          order_type: orderType,
+          subtotal,
+          delivery_charge: deliveryCharge,
+          total,
+          payment_status,
+        },
+        prefer: "return=minimal",
+      });
+
+      // Items are replaced wholesale rather than diffed line by line — this
+      // form never had a stable per-line identity to diff against, and at
+      // Navera's order size (one or two pack sizes) there is nothing a diff
+      // would save. Delete-then-insert is not atomic over PostgREST; if the
+      // insert fails the order is briefly itemless, which is why the error
+      // below says so explicitly rather than a generic "try again".
+      await db(`order_items?order_id=eq.${order.id}`, {
+        method: "DELETE",
+        prefer: "return=minimal",
+      });
+      await db("order_items", {
+        method: "POST",
+        body: lines.map((l) => ({ order_id: order.id, ...l })),
+        prefer: "return=minimal",
+      });
+
+      await onSaved?.();
+    } catch (e) {
+      if (e instanceof SessionExpired) {
+        onExpired();
+        return;
+      }
+      setError(
+        `${e.message} — the order's packs may be empty until this is fixed. Reopen Edit and try again.`
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="ad-modal-backdrop" onClick={onClose}>
+      <section className="ad-entry" onClick={(e) => e.stopPropagation()}>
+        <div className="ad-entry-head">
+          <h2>Edit {order.reference}</h2>
+          <button type="button" className="ad-close" onClick={onClose} aria-label="Close">
+            ×
+          </button>
+        </div>
+
+        <div className="ad-typeswitch" role="group" aria-label="What is this order?">
+          <button
+            type="button"
+            className="ad-type"
+            aria-pressed={orderType === "sale"}
+            onClick={() => setOrderType("sale")}
+          >
+            Sale
+          </button>
+          <button
+            type="button"
+            className="ad-type"
+            aria-pressed={orderType === "sample"}
+            disabled={!sampleProduct}
+            onClick={() => setOrderType("sample")}
+          >
+            Sample
+          </button>
+        </div>
+
+        {orderType === "sample" && !sampleProduct && (
+          <div className="ad-err">
+            The {SAMPLE_WEIGHT_GRAMS}g sample pack isn&apos;t in the products
+            table, so this can&apos;t be saved as a sample.
+          </div>
+        )}
+
+        {startingType === "sale" && orderType === "sample" && (
+          <p className="ad-note">
+            This will stop collecting {rupees(order.total)} on delivery and
+            mark it not applicable — nothing is owed on a sample.
+          </p>
+        )}
+        {startingType === "sample" && orderType === "sale" && (
+          <p className="ad-note">
+            This turns it back into a real sale. Payment will show as unpaid
+            until you mark it paid on the card.
+          </p>
+        )}
+
+        <div className="ad-sub">{isSampleEntry ? "Sample packs" : "Packs"}</div>
+
+        {isSampleEntry ? (
+          <div className="qty">
+            <span className="lbl">
+              {sampleProduct.weight_grams}g · free
+              <span className="sub">worth {rupees(Number(sampleProduct.price) * sampleQty)}</span>
+            </span>
+            <div className="ctrls">
+              <button
+                type="button"
+                aria-label={`One less ${sampleProduct.weight_grams}g sample`}
+                onClick={() => setSampleQty((n) => Math.max(1, n - 1))}
+              >
+                −
+              </button>
+              <span className="n">{sampleQty}</span>
+              <button
+                type="button"
+                aria-label={`One more ${sampleProduct.weight_grams}g sample`}
+                onClick={() => setSampleQty((n) => Math.min(50, n + 1))}
+              >
+                +
+              </button>
+            </div>
+          </div>
+        ) : (
+          products.map((p) => (
+            <div className="qty" key={p.id}>
+              <span className="lbl">
+                {p.weight_grams}g · {rupees(p.price)}
+              </span>
+              <div className="ctrls">
+                <button
+                  type="button"
+                  aria-label={`One less ${p.weight_grams}g pack`}
+                  onClick={() =>
+                    setQty((q) => ({ ...q, [p.id]: Math.max(0, (q[p.id] ?? 0) - 1) }))
+                  }
+                >
+                  −
+                </button>
+                <span className="n">{qty[p.id] ?? 0}</span>
+                <button
+                  type="button"
+                  aria-label={`One more ${p.weight_grams}g pack`}
+                  onClick={() =>
+                    setQty((q) => ({ ...q, [p.id]: Math.min(50, (q[p.id] ?? 0) + 1) }))
+                  }
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+
+        <DateField dates={dates} value={date} onChange={setDate} />
+
+        <div className={`ad-entry-total${isSampleEntry ? " is-sample" : ""}`}>
+          <span>{isSampleEntry ? "Sample — nothing to collect" : "To collect on delivery"}</span>
+          <strong>{rupees(total)}</strong>
+        </div>
+
+        {error && <div className="ad-err">{error}</div>}
+
+        <button className="cta" disabled={!ready || busy} onClick={submit}>
+          {busy ? "Saving…" : "Save changes"}
+        </button>
+      </section>
+    </div>
   );
 }
