@@ -784,6 +784,21 @@ function ManualEntry({
   const [phone, setPhone] = useState("");
   const [lookup, setLookup] = useState({ state: "idle", customer: null });
 
+  // How this screen is finding the customer right now. 'phone' is the
+  // original, fastest path (typing the WhatsApp number); 'name' and
+  // 'apartment' are for when the number isn't handy but the person or their
+  // community is. All three converge on the same place: picking a result in
+  // name/apartment mode sets `phone`, which the lookup effect below then
+  // resolves exactly as if it had been typed.
+  const [mode, setMode] = useState("phone");
+
+  const [nameQuery, setNameQuery] = useState("");
+  const [nameResults, setNameResults] = useState({ state: "idle", rows: [] });
+
+  const [apartmentAreaId, setApartmentAreaId] = useState("");
+  const [apartmentFilter, setApartmentFilter] = useState("");
+  const [apartmentResults, setApartmentResults] = useState({ state: "idle", rows: [] });
+
   const [name, setName] = useState("");
   const [areaId, setAreaId] = useState("");
   const [flat, setFlat] = useState("");
@@ -841,6 +856,84 @@ function ManualEntry({
       cancelled = true;
     };
   }, [phone, onExpired]);
+
+  // Name search: debounced, since it runs on every keystroke rather than
+  // waiting for a fixed-length value the way the phone field does.
+  useEffect(() => {
+    if (mode !== "name") return;
+    const q = nameQuery.trim();
+    if (q.length < 2) {
+      setNameResults({ state: "idle", rows: [] });
+      return;
+    }
+
+    setNameResults({ state: "searching", rows: [] });
+    const timer = setTimeout(async () => {
+      try {
+        const rows = await db(
+          "customers?select=id,name,phone,flat,delivery_area_id,area:delivery_areas(name)" +
+            `&name=ilike.${encodeURIComponent(`*${q}*`)}&order=name&limit=20`
+        );
+        setNameResults({ state: rows?.length ? "found" : "empty", rows: rows ?? [] });
+      } catch (e) {
+        if (e instanceof SessionExpired) onExpired();
+        else setNameResults({ state: "error", rows: [] });
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [mode, nameQuery, onExpired]);
+
+  // Apartment search: everyone in the chosen community, fetched once per
+  // community rather than per keystroke — communities here run to a few dozen
+  // customers at most, so the optional filter below runs client-side against
+  // this list instead of round-tripping again.
+  useEffect(() => {
+    if (mode !== "apartment" || !apartmentAreaId) {
+      setApartmentResults({ state: "idle", rows: [] });
+      return;
+    }
+
+    let cancelled = false;
+    setApartmentResults({ state: "searching", rows: [] });
+
+    (async () => {
+      try {
+        const rows = await db(
+          `customers?select=id,name,phone,flat,delivery_area_id&delivery_area_id=eq.${apartmentAreaId}&order=flat&limit=200`
+        );
+        if (cancelled) return;
+        setApartmentResults({ state: rows?.length ? "found" : "empty", rows: rows ?? [] });
+      } catch (e) {
+        if (cancelled) return;
+        if (e instanceof SessionExpired) onExpired();
+        else setApartmentResults({ state: "error", rows: [] });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, apartmentAreaId, onExpired]);
+
+  const filteredApartmentRows = useMemo(() => {
+    const q = apartmentFilter.trim().toLowerCase();
+    if (!q) return apartmentResults.rows;
+    return apartmentResults.rows.filter(
+      (c) => c.name.toLowerCase().includes(q) || (c.flat ?? "").toLowerCase().includes(q)
+    );
+  }, [apartmentResults.rows, apartmentFilter]);
+
+  // Picking a result in name/apartment mode hands off to the exact same path
+  // as typing the number: setting `phone` re-triggers the lookup effect
+  // above, which re-fetches this same customer (phone is unique) and
+  // populates name/area/flat. One request more than strictly necessary, but
+  // it means there is only one place that turns a phone number into a known
+  // customer, so Change details / packs / submit all keep working unchanged.
+  function selectCustomer(customer) {
+    setMode("phone");
+    setPhone(customer.phone);
+  }
 
   const lines = useMemo(() => {
     // A sample is always the 100g pack and nothing else. unit_price stays the
@@ -972,6 +1065,12 @@ function ManualEntry({
   function reset() {
     setPhone("");
     setLookup({ state: "idle", customer: null });
+    setMode("phone");
+    setNameQuery("");
+    setNameResults({ state: "idle", rows: [] });
+    setApartmentAreaId("");
+    setApartmentFilter("");
+    setApartmentResults({ state: "idle", rows: [] });
     setName("");
     setAreaId("");
     setFlat("");
@@ -1055,50 +1154,162 @@ function ManualEntry({
         </div>
       )}
 
-      <div className="field">
-        <label htmlFor="mp">Their number</label>
-        <input
-          id="mp"
-          value={phone}
-          inputMode="numeric"
-          autoFocus
-          maxLength={10}
-          placeholder="10 digits"
-          onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-        />
+      {/* How to find the customer. Phone stays first/default: it's still the
+          fastest path when the number is at hand. Name and Apartment exist
+          for the common case on this screen — an order arriving by WhatsApp
+          where the person or their community is what's remembered, not the
+          digits. */}
+      <div className="ad-typeswitch" role="group" aria-label="Find the customer by">
+        <button
+          type="button"
+          className="ad-type"
+          aria-pressed={mode === "phone"}
+          onClick={() => setMode("phone")}
+        >
+          Phone
+        </button>
+        <button
+          type="button"
+          className="ad-type"
+          aria-pressed={mode === "name"}
+          onClick={() => setMode("name")}
+        >
+          Name
+        </button>
+        <button
+          type="button"
+          className="ad-type"
+          aria-pressed={mode === "apartment"}
+          onClick={() => setMode("apartment")}
+        >
+          Apartment
+        </button>
       </div>
 
-      {lookup.state === "searching" && <div className="ad-lookup">Looking up…</div>}
-
-      {lookup.state === "error" && (
-        <div className="ad-err">
-          Couldn&apos;t check that number. Fill the details in below and it will still save.
-        </div>
-      )}
-
-      {known && (
-        <div className="ad-known">
-          <strong>{lookup.customer.name}</strong>
-          <span>
-            {areas.find((a) => a.id === areaId)?.name ?? "—"} · {flat || "—"}
-          </span>
-          <button type="button" className="ad-editlink" onClick={() => setLookup({ ...lookup, state: "new" })}>
-            Change details
-          </button>
-        </div>
-      )}
-
-      {/* Four extra fields, and only for someone we haven't served before. */}
-      {(lookup.state === "new" || lookup.state === "error") && (
+      {mode === "phone" && (
         <>
           <div className="field">
-            <label htmlFor="mn">Name</label>
-            <input id="mn" value={name} onChange={(e) => setName(e.target.value)} />
+            <label htmlFor="mp">Their number</label>
+            <input
+              id="mp"
+              value={phone}
+              inputMode="numeric"
+              autoFocus
+              maxLength={10}
+              placeholder="10 digits"
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+            />
           </div>
 
+          {lookup.state === "searching" && <div className="ad-lookup">Looking up…</div>}
+
+          {lookup.state === "error" && (
+            <div className="ad-err">
+              Couldn&apos;t check that number. Fill the details in below and it will still save.
+            </div>
+          )}
+
+          {known && (
+            <div className="ad-known">
+              <strong>{lookup.customer.name}</strong>
+              <span>
+                {areas.find((a) => a.id === areaId)?.name ?? "—"} · {flat || "—"}
+              </span>
+              <button type="button" className="ad-editlink" onClick={() => setLookup({ ...lookup, state: "new" })}>
+                Change details
+              </button>
+            </div>
+          )}
+
+          {/* Four extra fields, and only for someone we haven't served before. */}
+          {(lookup.state === "new" || lookup.state === "error") && (
+            <>
+              <div className="field">
+                <label htmlFor="mn">Name</label>
+                <input id="mn" value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+
+              <div className="field">
+                <label htmlFor="ma">Community</label>
+                <select id="ma" value={areaId} onChange={(e) => setAreaId(e.target.value)}>
+                  <option value="">Choose community</option>
+                  {areas.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="field">
+                <label htmlFor="mf">Flat / block</label>
+                <input
+                  id="mf"
+                  value={flat}
+                  placeholder="e.g. B-302"
+                  onChange={(e) => setFlat(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {mode === "name" && (
+        <>
           <div className="field">
-            <label htmlFor="ma">Community</label>
-            <select id="ma" value={areaId} onChange={(e) => setAreaId(e.target.value)}>
+            <label htmlFor="ns">Search by name</label>
+            <input
+              id="ns"
+              value={nameQuery}
+              autoFocus
+              placeholder="e.g. Kishore"
+              onChange={(e) => setNameQuery(e.target.value)}
+            />
+          </div>
+
+          {nameResults.state === "searching" && <div className="ad-lookup">Searching…</div>}
+
+          {nameResults.state === "error" && (
+            <div className="ad-err">Couldn&apos;t search right now. Try again, or switch to phone.</div>
+          )}
+
+          {nameResults.state === "empty" && (
+            <div className="ad-lookup">No one matches &quot;{nameQuery.trim()}&quot;.</div>
+          )}
+
+          {nameResults.rows.length > 0 && (
+            <div className="ad-results">
+              {nameResults.rows.map((c) => (
+                <button type="button" key={c.id} className="ad-result" onClick={() => selectCustomer(c)}>
+                  <strong>{c.name}</strong>
+                  <span>
+                    {c.area?.name ?? "—"} · {c.flat || "—"} · {c.phone}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <button type="button" className="ad-editlink" onClick={() => setMode("phone")}>
+            Can&apos;t find them? Enter their number instead
+          </button>
+        </>
+      )}
+
+      {mode === "apartment" && (
+        <>
+          <div className="field">
+            <label htmlFor="aa">Community</label>
+            <select
+              id="aa"
+              value={apartmentAreaId}
+              autoFocus
+              onChange={(e) => {
+                setApartmentAreaId(e.target.value);
+                setApartmentFilter("");
+              }}
+            >
               <option value="">Choose community</option>
               {areas.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -1108,15 +1319,50 @@ function ManualEntry({
             </select>
           </div>
 
-          <div className="field">
-            <label htmlFor="mf">Flat / block</label>
-            <input
-              id="mf"
-              value={flat}
-              placeholder="e.g. B-302"
-              onChange={(e) => setFlat(e.target.value)}
-            />
-          </div>
+          {apartmentAreaId && (
+            <div className="field">
+              <label htmlFor="af">Filter by name or flat</label>
+              <input
+                id="af"
+                value={apartmentFilter}
+                placeholder="Optional"
+                onChange={(e) => setApartmentFilter(e.target.value)}
+              />
+            </div>
+          )}
+
+          {apartmentResults.state === "searching" && <div className="ad-lookup">Loading residents…</div>}
+
+          {apartmentResults.state === "error" && (
+            <div className="ad-err">Couldn&apos;t load that community. Try again, or switch to phone.</div>
+          )}
+
+          {apartmentResults.state === "empty" && (
+            <div className="ad-lookup">No customers on file for this community yet.</div>
+          )}
+
+          {apartmentResults.state === "found" && filteredApartmentRows.length === 0 && (
+            <div className="ad-lookup">
+              No one in this community matches &quot;{apartmentFilter.trim()}&quot;.
+            </div>
+          )}
+
+          {filteredApartmentRows.length > 0 && (
+            <div className="ad-results">
+              {filteredApartmentRows.map((c) => (
+                <button type="button" key={c.id} className="ad-result" onClick={() => selectCustomer(c)}>
+                  <strong>{c.name}</strong>
+                  <span>
+                    {c.flat || "—"} · {c.phone}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <button type="button" className="ad-editlink" onClick={() => setMode("phone")}>
+            Can&apos;t find them? Enter their number instead
+          </button>
         </>
       )}
 
