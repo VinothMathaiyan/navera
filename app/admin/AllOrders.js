@@ -177,12 +177,28 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
 
   const hasRange = fromDate || toDate;
 
-  // Money — moved here from Dashboard. Deliberately computed from `list`
-  // (every order, unfiltered) rather than `shown`: it is an all-time figure
-  // by definition, and must not quietly change meaning depending on which
-  // status chip or date range happens to be selected above.
+  // Money used to be computed from `list` (every order, all time) regardless
+  // of the filters above, on the theory that it shouldn't "quietly change
+  // meaning" depending on which chip was pressed. jn asked for the opposite:
+  // these figures should answer "how did the slice I've filtered to do,"
+  // which is what you're looking at the moment you've picked a date range or
+  // a status. Scoped to `shown` — the same date-range + status filter as the
+  // table below and the CSV export — so the number here always matches what
+  // you're looking at. Clearing every filter still gets you the all-time
+  // figure, because `shown` then equals `list`; nothing is lost, and the
+  // scope label below always names exactly what's included so it can't be
+  // misread as all-time when it isn't.
   const today = todayISO(timezone);
-  const money = useMemo(() => computeMoney(list, today), [list, today]);
+  const money = useMemo(() => computeMoney(shown, today), [shown, today]);
+
+  const scopeLabel = useMemo(() => {
+    const parts = [];
+    if (statusFilter !== "all") parts.push(STATUS_LABEL[statusFilter] ?? statusFilter);
+    if (fromDate && toDate) parts.push(`${short(fromDate)}–${short(toDate)}`);
+    else if (fromDate) parts.push(`from ${short(fromDate)}`);
+    else if (toDate) parts.push(`through ${short(toDate)}`);
+    return parts.length ? parts.join(" · ") : "all time";
+  }, [statusFilter, fromDate, toDate]);
 
   function exportCSV() {
     const stamp = new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
@@ -209,11 +225,12 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
         </div>
       </div>
 
-      {/* money — all time, deliberately not scoped to the filters below */}
+      {/* money — scoped to the date range + status filters below, same as
+          the table and the CSV export; see the comment by `money` above */}
       <section className="ad-money">
         <div className="ad-money-head">
           <h2 className="ad-h">Money</h2>
-          <span className="ad-money-scope">all time</span>
+          <span className="ad-money-scope">{scopeLabel}</span>
         </div>
 
         {/* What is owed. The age is counted from the delivery day, so an
@@ -247,6 +264,10 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
           <div className="ad-money-fig">
             <div className="n">{rupees(money.revenue)}</div>
             <div className="l">revenue collected</div>
+          </div>
+          <div className="ad-money-fig">
+            <div className="n">{shown.length}</div>
+            <div className="l">order{shown.length === 1 ? "" : "s"}</div>
           </div>
           <div className="ad-money-fig">
             <div className="n">
