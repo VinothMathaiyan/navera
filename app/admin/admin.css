@@ -1298,6 +1298,33 @@
   color: #fff;
 }
 
+/* ---------------- name / apartment lookup results ---------------- */
+
+.ad-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.ad-result {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 9px 12px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.ad-result:hover { border-color: var(--green-soft); background: var(--sage); }
+.ad-result strong { font-size: 14.5px; color: var(--ink); }
+.ad-result span { font-size: 12.5px; color: var(--muted); }
+
 .qty .lbl .sub {
   display: block;
   margin-top: 2px;
