@@ -141,7 +141,10 @@ function download(filename, text) {
 }
 
 export default function AllOrders({ orders, settings, loading, onRefresh }) {
-  const [statusFilter, setStatusFilter] = useState("all");
+  // Multi-select: the statuses currently ticked. An empty array means "All"
+  // (no status filtering), so there is one representation of "everything" and
+  // the All chip is simply the state where nothing else is ticked.
+  const [statusFilter, setStatusFilter] = useState([]);
   // Delivery-date range, not placed-date — this mirrors the Dashboard tab's
   // own date picker, just widened from "one day" to "from / to". Empty
   // string means that end of the range is open.
@@ -169,9 +172,9 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
 
   const shown = useMemo(
     () =>
-      statusFilter === "all"
+      statusFilter.length === 0
         ? dateFiltered
-        : dateFiltered.filter((o) => o.status === statusFilter),
+        : dateFiltered.filter((o) => statusFilter.includes(o.status)),
     [dateFiltered, statusFilter]
   );
 
@@ -193,17 +196,30 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
 
   const scopeLabel = useMemo(() => {
     const parts = [];
-    if (statusFilter !== "all") parts.push(STATUS_LABEL[statusFilter] ?? statusFilter);
+    if (statusFilter.length > 0)
+      parts.push(statusFilter.map((s) => STATUS_LABEL[s] ?? s).join(" + "));
     if (fromDate && toDate) parts.push(`${short(fromDate)}–${short(toDate)}`);
     else if (fromDate) parts.push(`from ${short(fromDate)}`);
     else if (toDate) parts.push(`through ${short(toDate)}`);
     return parts.length ? parts.join(" · ") : "all time";
   }, [statusFilter, fromDate, toDate]);
 
+  // Tap a status to add it to / remove it from the selection. Ticking every
+  // status is the same as All, so it folds back to the empty (All) state.
+  function toggleStatus(s) {
+    setStatusFilter((prev) => {
+      const next = prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s];
+      return next.length === STATUS_ORDER.length ? [] : next;
+    });
+  }
+
   function exportCSV() {
     const stamp = new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
     const range = hasRange ? `${fromDate || "start"}_to_${toDate || "now"}` : "all-dates";
-    download(`navera-orders-${statusFilter}-${range}-${stamp}.csv`, toCSV(shown, timezone));
+    const statusPart = statusFilter.length
+      ? STATUS_ORDER.filter((s) => statusFilter.includes(s)).join("+")
+      : "all";
+    download(`navera-orders-${statusPart}-${range}-${stamp}.csv`, toCSV(shown, timezone));
   }
 
   return (
@@ -344,8 +360,8 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
         <button
           type="button"
           className="ad-filter"
-          aria-pressed={statusFilter === "all"}
-          onClick={() => setStatusFilter("all")}
+          aria-pressed={statusFilter.length === 0}
+          onClick={() => setStatusFilter([])}
         >
           All ({counts.all})
         </button>
@@ -354,8 +370,8 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
             key={s}
             type="button"
             className="ad-filter"
-            aria-pressed={statusFilter === s}
-            onClick={() => setStatusFilter(s)}
+            aria-pressed={statusFilter.includes(s)}
+            onClick={() => toggleStatus(s)}
           >
             {STATUS_LABEL[s]} ({counts[s] ?? 0})
           </button>
