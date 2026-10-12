@@ -10,6 +10,7 @@ import {
   PAYMENT_METHODS,
   pendingDays,
 } from "./payments";
+import { unitPrice, hasSubscriberPrice } from "./pricing";
 import Settings from "./Settings";
 import Products from "./Products";
 import Areas from "./Areas";
@@ -117,7 +118,7 @@ const ORDER_SELECT =
   "id,reference,delivery_date,status,source,subtotal,delivery_charge,total,notes," +
   "time_preference,address_note,created_at," +
   "order_type,payment_status,payment_method,paid_at," +
-  "customer:customers(id,name,phone,flat,area:delivery_areas(name))," +
+  "customer:customers(id,name,phone,flat,is_subscriber,area:delivery_areas(name))," +
   // product_id travels with each item now, purely so EditOrder can match a
   // line back to a row in `products` (or to the sample pack) without
   // guessing from weight_grams, which two products could someday share.
@@ -188,7 +189,7 @@ export default function AdminDashboard() {
         // Inactive rows are read too, because the 100g sample pack is one of
         // them. They are split apart below — the sale packs a customer can
         // order stay exactly the active ones.
-        db("products?select=id,name,weight_grams,price,is_active&order=sort_order"),
+        db("products?select=id,name,weight_grams,price,subscriber_price,is_active&order=sort_order"),
         // Active only: this feeds the manual-entry dropdown, which must match
         // what a customer can choose. The Communities screen does its own,
         // unfiltered read.
@@ -723,6 +724,21 @@ function Login({ onSignedIn }) {
    case when Gowri forgot to log one at the time. "A different date" swaps the
    button row for a plain date input with no min/max, so any past or future
    date can be typed in — used here and in EditOrder. */
+/* "200g · ₹170", or for a subscriber "200g · ₹165" with the standard price
+   beside it so it is clear a different price is being charged. Packs with no
+   subscriber price just show their one price. */
+function PackLabel({ p, isSubscriber }) {
+  const price = unitPrice(p, isSubscriber);
+  return (
+    <>
+      {p.weight_grams}g · {rupees(price)}
+      {isSubscriber && hasSubscriberPrice(p) && (
+        <span className="sub">standard {rupees(p.price)}</span>
+      )}
+    </>
+  );
+}
+
 function DateField({ dates, value, onChange, label = "Delivery date" }) {
   const [custom, setCustom] = useState(() => Boolean(value) && !dates.includes(value));
 
@@ -808,6 +824,13 @@ function ManualEntry({
   const [qty, setQty] = useState({});
   const [date, setDate] = useState(defaultDate);
 
+  // Whether this customer pays subscriber prices. Seeded from the customer's
+  // saved flag when the number is recognised, and written back with the order
+  // so it sticks — the same way name and flat are. This tick-box is the ONLY
+  // way a customer gets the subscriber price: nothing infers it from an order
+  // pattern, and the public order page never offers it.
+  const [isSubscriber, setIsSubscriber] = useState(false);
+
   // 'sale' | 'sample'. A sample is the 100g pack, given away: no money, no
   // choice of pack. The database enforces both (payment_status forced to
   // not_applicable and total to 0), so this control decides what gets typed,
@@ -834,7 +857,7 @@ function ManualEntry({
     (async () => {
       try {
         const rows = await db(
-          `customers?select=id,name,phone,flat,delivery_area_id&phone=eq.${phone}&limit=1`
+          `customers?select=id,name,phone,flat,delivery_area_id,is_subscriber&phone=eq.${phone}&limit=1`
         );
         if (cancelled) return;
 
@@ -844,6 +867,7 @@ function ManualEntry({
           setName(customer.name ?? "");
           setAreaId(customer.delivery_area_id ?? "");
           setFlat(customer.flat ?? "");
+          setIsSubscriber(Boolean(customer.is_subscriber));
         }
       } catch (e) {
         if (cancelled) return;
@@ -954,11 +978,12 @@ function ManualEntry({
       .map((p) => ({
         product_id: p.id,
         quantity: qty[p.id],
-        // Priced from the products table, never from anything typed in.
-        unit_price: Number(p.price),
+        // Priced from the products table, never from anything typed in. The
+        // subscriber price applies only while the tick-box is on.
+        unit_price: unitPrice(p, isSubscriber),
         weight_grams: p.weight_grams,
       }));
-  }, [products, qty, isSampleEntry, sampleProduct, sampleQty]);
+  }, [products, qty, isSampleEntry, sampleProduct, sampleQty, isSubscriber]);
 
   // What the paneer is worth at list price. For a sale it is what gets
   // collected; for a sample it is recorded and then charged at zero.
@@ -986,7 +1011,12 @@ function ManualEntry({
       // 1 — customer. Writing the form values back on every order means a
       // corrected flat number or a move to another block sticks.
       let customerId = lookup.customer?.id ?? null;
-      const details = { name: name.trim(), delivery_area_id: areaId, flat: flat.trim() };
+      const details = {
+        name: name.trim(),
+        delivery_area_id: areaId,
+        flat: flat.trim(),
+        is_subscriber: isSubscriber,
+      };
 
       if (customerId) {
         await db(`customers?id=eq.${customerId}`, {
@@ -1077,6 +1107,7 @@ function ManualEntry({
     setNotes("");
     setAddressNote("");
     setQty({});
+    setIsSubscriber(false);
     setOrderType("sale");
     setSampleQty(1);
     setDone(null);
@@ -1370,6 +1401,17 @@ function ManualEntry({
         <>
           <div className="ad-sub">{isSampleEntry ? "Sample packs" : "Packs"}</div>
 
+          {!isSampleEntry && (
+            <label className="ad-subbox">
+              <input
+                type="checkbox"
+                checked={isSubscriber}
+                onChange={(e) => setIsSubscriber(e.target.checked)}
+              />
+              <span>Subscriber — charge subscriber prices</span>
+            </label>
+          )}
+
           {isSampleEntry && (
             <>
               <div className="qty">
@@ -1409,7 +1451,7 @@ function ManualEntry({
             products.map((p) => (
               <div className="qty" key={p.id}>
                 <span className="lbl">
-                  {p.weight_grams}g · {rupees(p.price)}
+                  <PackLabel p={p} isSubscriber={isSubscriber} />
                 </span>
                 <div className="ctrls">
                   <button
@@ -1963,6 +2005,12 @@ function OrderCard({ order, settings, today, onStatusChanged, onExpired, onEdit 
 function EditOrder({ order, products, sampleProduct, settings, dates, onClose, onSaved, onExpired }) {
   const startingType = order.order_type === "sample" ? "sample" : "sale";
   const [orderType, setOrderType] = useState(startingType);
+
+  // Subscriber pricing follows the customer's saved flag here. There is no
+  // tick-box in this form on purpose: re-saving an order must not silently
+  // flip what a customer pays, and the flag is changed where the customer is
+  // chosen (Add order), not while correcting a quantity.
+  const isSubscriber = Boolean(order.customer?.is_subscriber);
   const isSampleEntry = orderType === "sample" && sampleProduct;
 
   const [date, setDate] = useState(order.delivery_date);
@@ -2007,10 +2055,10 @@ function EditOrder({ order, products, sampleProduct, settings, dates, onClose, o
       .map((p) => ({
         product_id: p.id,
         quantity: qty[p.id],
-        unit_price: Number(p.price),
+        unit_price: unitPrice(p, isSubscriber),
         weight_grams: p.weight_grams,
       }));
-  }, [products, qty, isSampleEntry, sampleProduct, sampleQty]);
+  }, [products, qty, isSampleEntry, sampleProduct, sampleQty, isSubscriber]);
 
   const subtotal = lines.reduce((sum, l) => sum + l.unit_price * l.quantity, 0);
   const deliveryCharge = isSampleEntry ? 0 : Number(settings?.delivery_charge ?? 0);
@@ -2126,6 +2174,13 @@ function EditOrder({ order, products, sampleProduct, settings, dates, onClose, o
 
         <div className="ad-sub">{isSampleEntry ? "Sample packs" : "Packs"}</div>
 
+        {isSubscriber && !isSampleEntry && (
+          <p className="ad-note" style={{ marginTop: 0, marginBottom: 10 }}>
+            This customer is a subscriber, so packs are priced at the
+            subscriber price.
+          </p>
+        )}
+
         {isSampleEntry ? (
           <div className="qty">
             <span className="lbl">
@@ -2154,7 +2209,7 @@ function EditOrder({ order, products, sampleProduct, settings, dates, onClose, o
           products.map((p) => (
             <div className="qty" key={p.id}>
               <span className="lbl">
-                {p.weight_grams}g · {rupees(p.price)}
+                <PackLabel p={p} isSubscriber={isSubscriber} />
               </span>
               <div className="ctrls">
                 <button

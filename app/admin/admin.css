@@ -1056,6 +1056,13 @@
   font-size: 15px;
 }
 
+/* Standard + subscriber price side by side. The labels sit above their
+   inputs so each number says what it is; the row wraps on a narrow phone
+   rather than squeezing two inputs and two buttons onto one line. */
+.ad-area-edit { flex-wrap: wrap; align-items: flex-end; }
+.ad-priceedit { display: flex; flex-direction: column; gap: 3px; flex: 1 1 96px; min-width: 0; }
+.ad-priceedit span { font-size: 12px; color: var(--muted); }
+
 .ad-area-add { display: flex; gap: 8px; margin-top: 14px; }
 .ad-area-add input {
   flex: 1 1 auto;
@@ -1324,6 +1331,21 @@
 .ad-result:hover { border-color: var(--green-soft); background: var(--sage); }
 .ad-result strong { font-size: 14.5px; color: var(--ink); }
 .ad-result span { font-size: 12.5px; color: var(--muted); }
+
+/* The subscriber tick-box above the packs in manual entry. The whole row is
+   the label, so the tap target is the row, at the 44px every admin control
+   holds to. */
+.ad-subbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  margin-bottom: 8px;
+  font-size: 14.5px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ad-subbox input { width: 22px; height: 22px; flex: 0 0 auto; accent-color: var(--green); }
 
 .qty .lbl .sub {
   display: block;
