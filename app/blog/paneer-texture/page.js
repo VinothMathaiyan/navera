@@ -120,10 +120,11 @@ export default async function PaneerTexturePost() {
         <section className="bl-made" aria-labelledby="simple">
           <h2 id="simple">Made simply, with care</h2>
           <p>
-            Our paneer is made with village cow milk and fresh lemon, nothing
-            more. We prepare it fresh after you order, with no preservatives and
-            no vinegar. As we grow, we want to keep listening and improving,
-            without changing the way we make our paneer.
+            Our paneer is made with milk from free-roaming cared cows, around
+            100 km away from Chennai, and fresh lemon. Nothing more. We prepare
+            it fresh after you order, with no preservatives and no vinegar. As
+            we grow, we want to keep listening and improving, without changing
+            the way we make our paneer.
           </p>
         </section>
 
