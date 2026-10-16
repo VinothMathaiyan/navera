@@ -89,16 +89,16 @@ export default async function PaneerTexturePost() {
           <h2 id="why">What decides how soft or firm paneer turns out?</h2>
           <p>
             Paneer is made by separating the milk solids from the liquid using
-            an acid. We use fresh lemon juice. Four things shape the final
-            texture:
+            an acid. We use fresh lemon juice. First, we heat the milk to 95°C
+            to remove harmful bacteria. After that, three things shape the
+            final texture:
           </p>
           <dl className="bl-factors">
-            <dt>Heat</dt>
-            <dd>How hot the milk gets changes how the milk proteins set.</dd>
-            <dt>Lemon</dt>
+            <dt>Lemon and temperature</dt>
             <dd>
-              How much lemon we add, how sour it is, and when it goes in all
-              affect how the curds form.
+              We add the lemon when the milk is between 70°C and 85°C,
+              depending on how firm we want the paneer. The temperature and the
+              amount of lemon both change how the curds form.
             </dd>
             <dt>Pressing</dt>
             <dd>
