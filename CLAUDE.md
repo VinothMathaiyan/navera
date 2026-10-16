@@ -1148,7 +1148,9 @@ writes exactly one thing.
   and never as revenue. The 100g product row exists but is `is_active = false`
   and must stay so; see the payment-and-samples section for why that is safe
   and what would break it.
-- Packs: **200g ₹170 and 500g ₹390 only.** A 100g ₹90 pack appears on the
+- Packs: **200g and 500g only** (live prices are in the `products` table, not
+  here — at 2026-10-11 they were 200g ₹170 / 500g ₹410; the ₹390 this line used
+  to quote was stale). A 100g ₹90 pack appears on the
   existing print banner but was confirmed dropped — do not add it back
   without an explicit new instruction. **A 100g row now exists in `products`
   for samples, deliberately inactive.** That is not the pack coming back: it is
@@ -1168,6 +1170,51 @@ writes exactly one thing.
   banner but was deliberately excluded here — A2 is a breed-specific,
   substantiation-requiring claim and the decision was to drop it, not to
   reintroduce it from old marketing material.
+
+## Subscriber pricing (added 2026-10-11, founder decision)
+
+Customers on a weekly subscription pay a lower price, set per pack:
+`products.price` is what everyone pays, `products.subscriber_price` is what
+flagged customers pay (null = no special price for that pack). At the time of
+writing: 200g ₹170 / ₹165 and 500g ₹410 / ₹400. `customers.is_subscriber` is the
+flag, and **only the admin sets it.**
+
+- **The public order page never shows or applies the subscriber price, and that
+  is a security decision, not a missing feature.** A phone number typed into the
+  public form is not proof of who is typing, so "show the lower price when the
+  number is a subscriber's" would let anyone find out who is a subscriber and
+  claim the discount. `place_order` applies `subscriber_price` only when
+  `auth.role()` is `authenticated` or `service_role` (a signed-in admin) **and**
+  the customer is flagged. `p_source` is never consulted for this — any caller
+  can type `'manual'`. Tested: public + flagged phone + `source = 'manual'` is
+  charged the standard price.
+- **Admin entry does not go through `place_order`.** ManualEntry and EditOrder
+  write `order_items` directly, so they price through `app/admin/pricing.js`
+  (`unitPrice(product, isSubscriber)`). Any new admin path that writes a
+  `unit_price` has to use it, or it will silently charge a subscriber the
+  standard price.
+  - ManualEntry has a "Subscriber" tick-box, seeded from the customer's flag and
+    written back with the order, like name and flat. EditOrder has none: it
+    follows the saved flag, so re-saving a quantity cannot flip what a customer
+    pays.
+  - The Products screen edits both prices. Empty subscriber price clears it. A
+    subscriber price above the standard price is refused (almost certainly a
+    typo). The inactive 100g sample pack has no subscriber price.
+- **`anon` cannot read `products.subscriber_price`.** Table-level `SELECT` on
+  `products` was replaced by a column-level grant that leaves it out, because a
+  direct `GET /rest/v1/products?select=*` with the public key would otherwise
+  have returned the subscriber prices. Consequences: `select=*` on `products`
+  as `anon` now fails with `42501` (the site never does this — it reads through
+  `get_ordering_info`), and **a column added to `products` later is not readable
+  by `anon` until it is granted.** If the order page ever breaks reading
+  products, check that grant first.
+- **Not built:** a flagged customer's "Order again" from `/my/<token>` still
+  pays the standard price, because that path is the public `place_order`. Do not
+  "fix" it by trusting the token alone to unlock the lower price without a
+  founder decision. Weekly Delivery (§41) should price its generated orders from
+  the subscriber price server-side.
+- Brand voice: the customer-facing word is "Fresh Paneer, Every Week", never
+  "Subscription". "Subscriber" appears only in the admin.
 
 ## Admin login
 

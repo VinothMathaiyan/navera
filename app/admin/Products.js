@@ -13,6 +13,11 @@
 // they were actually charged; changing a pack's price here never rewrites
 // history.
 //
+// Each pack has two prices. `price` is what everyone pays. `subscriber_price`
+// is what customers flagged as subscribers pay when an order is entered in the
+// admin; leave it empty and that pack has no special price. The public order
+// page never shows or applies the subscriber price — see pricing.js for why.
+//
 // Only price is editable here. Renaming a pack or changing its weight touches
 // order_items.weight_grams history and the manual-entry sample logic
 // (AdminDashboard keys the 100g sample pack off weight_grams) and is
@@ -30,6 +35,7 @@ export default function Products({ onExpired, onProductsChanged }) {
 
   const [editId, setEditId] = useState(null);
   const [editPrice, setEditPrice] = useState("");
+  const [editSub, setEditSub] = useState("");
 
   const load = useCallback(async () => {
     setError(null);
@@ -38,7 +44,7 @@ export default function Products({ onExpired, onProductsChanged }) {
       // from customers) but its price still feeds manual sample entries in
       // the order form, so it belongs on this screen too.
       const rows = await db(
-        "products?select=id,name,weight_grams,price,is_active,sort_order&order=sort_order"
+        "products?select=id,name,weight_grams,price,subscriber_price,is_active,sort_order&order=sort_order"
       );
       setProducts(rows ?? []);
     } catch (e) {
@@ -72,11 +78,30 @@ export default function Products({ onExpired, onProductsChanged }) {
       setError("Enter a price of ₹0 or more.");
       return;
     }
+
+    // Subscriber price is optional: empty clears it. Only active packs have
+    // one — the inactive 100g pack is the sample pack and is never sold.
+    let sub = null;
+    if (p.is_active) {
+      const rawSub = editSub.trim();
+      if (rawSub) {
+        sub = Number(rawSub);
+        if (!Number.isFinite(sub) || sub < 0) {
+          setError("Enter a subscriber price of ₹0 or more, or leave it empty.");
+          return;
+        }
+        if (sub > n) {
+          setError("The subscriber price can't be higher than the standard price.");
+          return;
+        }
+      }
+    }
+
     setBusyId(p.id);
     mutate(async () => {
       await db(`products?id=eq.${p.id}`, {
         method: "PATCH",
-        body: { price: n },
+        body: p.is_active ? { price: n, subscriber_price: sub } : { price: n },
         prefer: "return=minimal",
       });
       setEditId(null);
@@ -96,10 +121,12 @@ export default function Products({ onExpired, onProductsChanged }) {
     <section className="ad-areas">
       <h2 className="ad-h">Pack prices</h2>
       <p className="ad-fieldnote" style={{ marginBottom: 14 }}>
-        The order page and every new order — website, WhatsApp, or manual —
-        price straight from what is saved here. A change reaches customers on
-        their next page load. Orders already placed keep the price they were
-        actually charged.
+        The order page and every new order price straight from what is saved
+        here. A change reaches customers on their next page load. Orders
+        already placed keep the price they were actually charged. The
+        subscriber price is used only for customers you tick as subscribers
+        when you add or edit an order here — the public order page always shows
+        the standard price.
       </p>
 
       {error && (
@@ -115,17 +142,36 @@ export default function Products({ onExpired, onProductsChanged }) {
             <li key={p.id} className={`ad-area${p.is_active ? "" : " is-off"}`}>
               {editing ? (
                 <div className="ad-area-edit">
-                  <input
-                    aria-label={`Price for ${p.name}`}
-                    inputMode="decimal"
-                    value={editPrice}
-                    autoFocus
-                    onChange={(e) => setEditPrice(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") savePrice(p);
-                      if (e.key === "Escape") setEditId(null);
-                    }}
-                  />
+                  <label className="ad-priceedit">
+                    <span>Standard</span>
+                    <input
+                      aria-label={`Standard price for ${p.name}`}
+                      inputMode="decimal"
+                      value={editPrice}
+                      autoFocus
+                      onChange={(e) => setEditPrice(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") savePrice(p);
+                        if (e.key === "Escape") setEditId(null);
+                      }}
+                    />
+                  </label>
+                  {p.is_active && (
+                    <label className="ad-priceedit">
+                      <span>Subscriber</span>
+                      <input
+                        aria-label={`Subscriber price for ${p.name}`}
+                        inputMode="decimal"
+                        value={editSub}
+                        placeholder="none"
+                        onChange={(e) => setEditSub(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") savePrice(p);
+                          if (e.key === "Escape") setEditId(null);
+                        }}
+                      />
+                    </label>
+                  )}
                   <button
                     type="button"
                     className="ad-mini is-primary"
@@ -146,6 +192,9 @@ export default function Products({ onExpired, onProductsChanged }) {
                     </span>
                     <span className="ad-area-meta">
                       ₹{Number(p.price).toFixed(0)}
+                      {p.subscriber_price !== null &&
+                        p.subscriber_price !== undefined &&
+                        ` · subscribers ₹${Number(p.subscriber_price).toFixed(0)}`}
                       {!p.is_active && " · hidden from new orders"}
                     </span>
                   </div>
@@ -157,10 +206,15 @@ export default function Products({ onExpired, onProductsChanged }) {
                       onClick={() => {
                         setError(null);
                         setEditPrice(String(Number(p.price)));
+                        setEditSub(
+                          p.subscriber_price === null || p.subscriber_price === undefined
+                            ? ""
+                            : String(Number(p.subscriber_price))
+                        );
                         setEditId(p.id);
                       }}
                     >
-                      Edit price
+                      Edit prices
                     </button>
                   </div>
                 </>
