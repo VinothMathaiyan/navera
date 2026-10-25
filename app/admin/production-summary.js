@@ -11,7 +11,7 @@
 // with this screen: both called computeForecast, so the maths could not drift,
 // but only one of them filtered, so the inputs did. Pass orders in raw.
 
-import { computeForecast } from "./forecast";
+import { computeForecast, countCustomers, isCancelled } from "./forecast";
 
 // The status vocabulary is defined with the maths it governs and re-exported
 // here, so a component still has one import site for all of it.
@@ -90,6 +90,7 @@ export function summariseDate(ordersForDate, settings) {
 
   return {
     orders: f.orderCount, // cancelled excluded from the headline count
+    customers: f.customerCount, // distinct people behind those orders
     done: f.doneCount,
     toMake: f.toMakeCount,
     // What Start can still act on — see isNotStarted. Not the same as toMake
@@ -125,7 +126,16 @@ export function buildProductionSummary(orders, settings, dates) {
       milk: t.milk + r.milk,
       lemons: t.lemons + r.lemons,
     }),
-    { orders: 0, done: 0, toMake: 0, notStarted: 0, kg: 0, milk: 0, lemons: 0 }
+    { orders: 0, customers: 0, done: 0, toMake: 0, notStarted: 0, kg: 0, milk: 0, lemons: 0 }
+  );
+
+  // Customers are the one column that must NOT be summed: someone who orders
+  // for Saturday and again for Sunday is one customer across the window, and
+  // adding the two days would count her twice. So the total is a fresh count
+  // of distinct customers over every live order on the dates shown.
+  const shown = new Set(dates ?? []);
+  totals.customers = countCustomers(
+    (orders ?? []).filter((o) => shown.has(o.delivery_date) && !isCancelled(o))
   );
 
   return { rows, totals };

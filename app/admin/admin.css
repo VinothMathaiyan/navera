@@ -915,6 +915,11 @@
   .ad-prod-split .ad-tablewrap { margin-inline: 0; padding-inline: 0; }
   .ad-prod-split .ad-note { margin-top: 0; }
 }
+/* A second note under the first keeps its gap at every width. Without this the
+   lg rule above, which zeroes the top margin so the FIRST note aligns with the
+   table, would zero it for the second note too and the two paragraphs would
+   touch. Higher specificity (3 classes vs 2) is what makes it win. */
+.ad-prod-side .ad-note + .ad-note { margin-top: 11px; }
 
 /* The manual-entry form is a form: it keeps a readable measure instead of
    stretching its inputs across the monitor. .field itself is not touched —
@@ -924,9 +929,10 @@
 }
 .ad-table {
   width: 100%;
-  /* 420 before the Start column was added to each row. The wrap above scrolls
-     horizontally, so this widens the scroll rather than the page. */
-  min-width: 480px;
+  /* 420 before the Start column was added to each row, 480 before the
+     Customers column. The wrap above scrolls horizontally, so this widens the
+     scroll rather than the page. */
+  min-width: 560px;
   border-collapse: collapse;
   font-size: 13.5px;
   font-variant-numeric: tabular-nums;
