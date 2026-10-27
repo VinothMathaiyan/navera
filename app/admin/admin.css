@@ -1263,6 +1263,39 @@
 
 /* ---------------- the unpaid filter ---------------- */
 
+/* ---------------- unique customers ---------------- */
+
+/* Page-wide figure, under the tabs. Same column and gutters as .ad-tabs so the
+   number lines up with the tab labels above and the content below. */
+.ad-custbar {
+  max-width: var(--ad-max);
+  margin: 0 auto;
+  padding: 12px var(--ad-pad) 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ad-custbar strong {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--green);
+}
+
+/* Filter-scoped figure on the Dashboard, directly under the filter chips it
+   follows. Sits closer to them than the list below does. */
+.ad-custline {
+  margin: -4px 0 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.ad-custline strong {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--green);
+}
+
 .ad-filters { display: flex; gap: 8px; margin: 2px 0 14px; }
 .ad-filter {
   min-height: 44px;

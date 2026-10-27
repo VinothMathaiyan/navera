@@ -15,6 +15,7 @@ import { useMemo, useState } from "react";
 import { STATUS_LABEL } from "./production-summary";
 import { SOURCE_LABEL } from "./AdminDashboard";
 import { computeMoney } from "./payments";
+import { countUniqueCustomers } from "./customers";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -194,6 +195,11 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
   const today = todayISO(timezone);
   const money = useMemo(() => computeMoney(shown, today), [shown, today]);
 
+  // Same scope as `money` and the order count beside it: the delivery-date
+  // range and the status chips. With every filter cleared this equals the
+  // page-wide "unique customers · all time" figure at the top of the admin.
+  const uniqueCustomers = useMemo(() => countUniqueCustomers(shown), [shown]);
+
   const scopeLabel = useMemo(() => {
     const parts = [];
     if (statusFilter.length > 0)
@@ -284,6 +290,10 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
           <div className="ad-money-fig">
             <div className="n">{shown.length}</div>
             <div className="l">order{shown.length === 1 ? "" : "s"}</div>
+          </div>
+          <div className="ad-money-fig">
+            <div className="n">{uniqueCustomers}</div>
+            <div className="l">unique customer{uniqueCustomers === 1 ? "" : "s"}</div>
           </div>
           <div className="ad-money-fig">
             <div className="n">

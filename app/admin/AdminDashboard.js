@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { currentSession, db, signIn, signOut, SessionExpired } from "../../lib/admin";
 import { computeForecast } from "./forecast";
+import { countUniqueCustomers } from "./customers";
 import {
   isPending,
   isSample,
@@ -132,7 +133,9 @@ const ORDER_SELECT =
 const ALL_ORDERS_SELECT =
   "id,reference,delivery_date,created_at,status,source,order_type," +
   "payment_status,payment_method,total,subtotal," +
-  "customer:customers(name,phone,flat,area:delivery_areas(name))," +
+  // id is asked for so the unique-customer count (./customers.js) keys on the
+  // customer rather than on whatever name or phone happens to be printed.
+  "customer:customers(id,name,phone,flat,area:delivery_areas(name))," +
   "items:order_items(quantity,weight_grams,unit_price)";
 
 /* Samples are given as 100g. That pack is a real products row but is
@@ -153,6 +156,12 @@ export default function AdminDashboard() {
 
   const [date, setDate] = useState(null);
   const [orders, setOrders] = useState([]);
+  // Every order ever placed — feeds the All Orders tab, its Money panel and the
+  // page-wide customer count. It starts as [] and so does "no orders at all";
+  // allOrdersLoaded tells the two apart so the count reads "—" until the read
+  // has landed instead of flashing a false 0.
+  const [allOrders, setAllOrders] = useState([]);
+  const [allOrdersLoaded, setAllOrdersLoaded] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -172,6 +181,8 @@ export default function AdminDashboard() {
     setSettings(null);
     setOrders([]);
     setDate(null);
+    setAllOrders([]);
+    setAllOrdersLoaded(false);
   }, []);
 
   /* ------------------------------------------------ reference data */
@@ -283,7 +294,8 @@ export default function AdminDashboard() {
 
   // Also the Money panel's data source now — see the comment on
   // ALL_ORDERS_SELECT above for why one read serves both.
-  const [allOrders, setAllOrders] = useState([]);
+  // (allOrders and allOrdersLoaded are declared with the other state at the
+  // top: dropToLogin has to reset them and is defined above this point.)
 
   const loadAllOrders = useCallback(async () => {
     if (!session) return;
@@ -292,6 +304,7 @@ export default function AdminDashboard() {
         `orders?select=${ALL_ORDERS_SELECT}&order=delivery_date.desc,created_at.desc`
       );
       setAllOrders(rows ?? []);
+      setAllOrdersLoaded(true);
     } catch (e) {
       if (e instanceof SessionExpired) dropToLogin();
       else setError(e.message);
@@ -330,6 +343,17 @@ export default function AdminDashboard() {
         : orders,
     [orders, unpaidOnly]
   );
+
+  /* ------------------------------------------------ unique customers */
+
+  // Two figures, two scopes, one definition (./customers.js):
+  //   totalCustomers  everyone who has ever ordered — the page-wide figure
+  //   shownCustomers  the people in the orders the Dashboard is showing right
+  //                   now, i.e. the chosen delivery date AND the Unpaid chip
+  // Both count the same way the order counts beside them do, so the customers
+  // figure and the orders figure always describe the same list.
+  const totalCustomers = useMemo(() => countUniqueCustomers(allOrders), [allOrders]);
+  const shownCustomers = useMemo(() => countUniqueCustomers(shownOrders), [shownOrders]);
 
   /* ------------------------------------------------ render */
 
@@ -397,6 +421,17 @@ export default function AdminDashboard() {
           Settings
         </button>
       </nav>
+
+      {/* The page-wide figure: everyone who has ever ordered, whatever tab or
+          filter is showing below. Not on Settings — that tab is configuration,
+          not the business. The tab-scoped figures live on Dashboard and All
+          Orders and move with their filters; this one never does. */}
+      {view !== "settings" && (
+        <div className="ad-custbar" role="status">
+          <strong>{allOrdersLoaded ? totalCustomers : "—"}</strong>{" "}
+          unique customer{allOrdersLoaded && totalCustomers === 1 ? "" : "s"} · all time
+        </div>
+      )}
 
       {view === "settings" ? (
         /* is-narrow: a form is read along its lines, so this tab keeps the
@@ -602,6 +637,20 @@ export default function AdminDashboard() {
               Unpaid ({unpaidCount})
             </button>
           </div>
+
+          {/* Follows the filters above: the delivery date chosen and the
+              Unpaid chip. It describes the same orders the cards below do, so
+              it names its scope rather than leaving "customers" to be read as
+              all-time. */}
+          {shownOrders.length > 0 && (
+            <div className="ad-custline">
+              <strong>{shownCustomers}</strong> unique customer
+              {shownCustomers === 1 ? "" : "s"} across {shownOrders.length} order
+              {shownOrders.length === 1 ? "" : "s"}
+              {date ? ` · ${shortDate(date)}` : ""}
+              {unpaidOnly ? " · unpaid only" : ""}
+            </div>
+          )}
 
           {!loading && orders.length === 0 && (
             <div className="ad-empty">
