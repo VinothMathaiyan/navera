@@ -532,6 +532,7 @@ export default function AdminDashboard() {
               from a day with no orders at all. */}
           <div className="ad-fc-foot">
             {forecast.orderCount} order{forecast.orderCount === 1 ? "" : "s"} ·{" "}
+            {forecast.customerCount} customer{forecast.customerCount === 1 ? "" : "s"} ·{" "}
             {forecast.toMakeCount} still to make · {forecast.packs} pack
             {forecast.packs === 1 ? "" : "s"} to make
             {forecast.doneCount > 0 && (

@@ -65,6 +65,26 @@ export const isDone = (o) =>
 // legitimate call if the duplication ever reads as an accident.
 export const isNotStarted = (o) => o.status === "confirmed";
 
+// CUSTOMERS, as opposed to orders. Added 2026-10-25 so the admin can see how
+// many households are actually coming in, which orders alone hide: someone who
+// places two orders for the same evening is two orders and one customer.
+//
+// The identity is the customer row, never the name or the order. Phone is the
+// customer's identity in the database, so it is the fallback if an order ever
+// arrives without a joined customer id. An order with neither is counted as its
+// own customer rather than dropped — an unknown person is still somebody
+// arriving, and a count that silently skips them would read low.
+export const customerKey = (o) =>
+  o.customer?.id ?? o.customer_id ?? o.customer?.phone ?? `order:${o.id}`;
+
+// Distinct customers across ANY set of orders. Takes the orders as given, so
+// the caller decides whether cancelled ones are in; computeForecast passes it
+// live orders only. Exported because a total over several days cannot be built
+// by adding the per-day counts — a customer who orders for Saturday and Sunday
+// is one customer in that window, and adding would count her twice.
+export const countCustomers = (orders) =>
+  new Set((orders ?? []).map(customerKey)).size;
+
 // The arithmetic for one set of orders. Private: callers get it through
 // computeForecast, which decides which orders belong in the set.
 function tally(orders, settings) {
@@ -129,6 +149,10 @@ export function computeForecast(orders, settings) {
     gross: tally(live, settings),
 
     orderCount: live.length, // cancelled excluded, as the counts always were
+    // Distinct customers behind those same live orders. Same set as orderCount
+    // on purpose, so "3 orders · 2 customers" is always one sentence about one
+    // group of orders. Samples count: a sample is somebody arriving too.
+    customerCount: countCustomers(live),
     toMakeCount: toMake.length,
     doneCount: done.length,
     // Orders the Start action would actually move. A subset of toMake.

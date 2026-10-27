@@ -93,13 +93,15 @@ export default function Production({ orders, settings, dates, today, onChanged, 
         <div className="ad-tablewrap">
           <table className="ad-table">
             <caption className="sr-only">
-              Production for the next six delivery days. Paneer, milk and lemons
-              cover only the orders still to make.
+              Production for the next six delivery days. Orders and customers
+              cover every live order; paneer, milk and lemons cover only the
+              orders still to make.
             </caption>
             <thead>
               <tr>
                 <th scope="col">Date</th>
                 <th scope="col" className="num">Orders</th>
+                <th scope="col" className="num">Customers</th>
                 <th scope="col" className="num">Done</th>
                 <th scope="col" className="num">To make</th>
                 <th scope="col" className="num">Paneer</th>
@@ -118,6 +120,7 @@ export default function Production({ orders, settings, dates, today, onChanged, 
                     {r.date === today && <span className="ad-today">Today</span>}
                   </th>
                   <td className="num">{r.orders}</td>
+                  <td className="num">{r.customers}</td>
                   <td className="num soft">{r.done}</td>
                   <td className="num strong">{r.toMake}</td>
                   <td className="num">{r.kg > 0 ? `${kg(r.kg)} kg` : "—"}</td>
@@ -151,7 +154,7 @@ export default function Production({ orders, settings, dates, today, onChanged, 
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="ad-fc-empty">
+                  <td colSpan={9} className="ad-fc-empty">
                     No delivery days are configured. Set them under Settings.
                   </td>
                 </tr>
@@ -161,6 +164,7 @@ export default function Production({ orders, settings, dates, today, onChanged, 
               <tr>
                 <th scope="row">Still to make</th>
                 <td className="num">{totals.orders}</td>
+                <td className="num">{totals.customers}</td>
                 <td className="num soft">{totals.done}</td>
                 <td className="num strong">{totals.toMake}</td>
                 <td className="num">{totals.kg > 0 ? `${kg(totals.kg)} kg` : "—"}</td>
@@ -179,6 +183,15 @@ export default function Production({ orders, settings, dates, today, onChanged, 
             has had its milk bought, and cancelled orders are excluded
             entirely. <strong>Start</strong> marks that whole evening&apos;s
             batch as preparing, which takes it out of these figures.
+          </p>
+
+          <p className="ad-note">
+            <strong>Customers</strong> counts people, not orders: someone with
+            two orders for the same evening counts once. It covers every order
+            that is not cancelled, finished ones included, so it tells you how
+            many households that evening reaches. In the bottom row each person
+            is counted once across all six days, so it can be lower than the
+            days added together.
           </p>
 
           {lastBulk && (

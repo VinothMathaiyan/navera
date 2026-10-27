@@ -730,6 +730,25 @@ jobs is what made it unpredictable.
   you cannot buy 0.2 of a litre. Lemons keep deriving from exact litres, so the
   founder's measured batch still reads 8.5 L → 9 lemons.
 - Cancelled orders are excluded from every figure, as before.
+- **Customers are counted by `customerCount` / `countCustomers`, added
+  2026-10-25 — people, not orders.** Distinct customers behind the same live
+  (non-cancelled) orders `orderCount` counts, so "19 orders · 18 customers" is
+  one sentence about one set of orders. It is **not** filtered to still-to-make:
+  a customer whose batch is preparing or delivered is still a household
+  reached that evening, so the figure answers "how many people is this day",
+  not "what is left to buy". The milk, lemon and pack figures keep their own
+  rule above, untouched.
+  - **Identity is `customer.id`**, falling back to `customer_id`, then phone,
+    then the order's own id. An order with no customer at all counts as its own
+    person rather than being dropped — a count that skips them reads low.
+  - **Never add per-day customer counts to get a window total.** Someone who
+    orders for Saturday and Sunday is one customer across the window. The
+    production table's bottom row calls `countCustomers` over every live order
+    on the dates shown; against the live database, three delivery days summed
+    to 46 and were really 28 people. Pinned against the database's own
+    `count(distinct customer_id)`.
+  - Samples count, as they do everywhere in this module — no `order_type`
+    filter.
 
 #### Payment tracking and samples (`app/admin/payments.js`)
 
@@ -860,6 +879,14 @@ writes exactly one thing.
   - `.ad-table` had its `min-width` raised 420 → 480 px for the extra column.
     The table scrolls inside `.ad-tablewrap`, so this widens that scroll and
     never the page.
+  - **A Customers column sits right after Orders** (2026-10-25), and the
+    dashboard's summary line reads "N orders · N customers · …". Raised
+    `min-width` again, 480 → 560 px. Checked in Chromium at 375 / 768 / 1280
+    with the real rows: every row has the same cell count as the header, no
+    sideways scroll of the page, and Customers stays beside Orders on the first
+    screen of a phone. A second `.ad-note` explains the column; the
+    `.ad-prod-side .ad-note + .ad-note` rule keeps the two paragraphs apart at
+    lg, where the first note's `margin-top: 0` would otherwise zero the second.
 
 ### Customer page — decisions that are load-bearing, not taste
 
