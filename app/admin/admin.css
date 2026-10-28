@@ -1460,3 +1460,341 @@
   .ad-money-fig.is-wide { flex: 1 1 100%; }
   .ad-money-fig .n { font-size: 19px; }
 }
+
+/* ---------------- All Orders → Customers ----------------
+
+   Appended after everything above on purpose: nothing earlier in this file was
+   edited for it, so the other tabs cannot have moved. Every selector starts
+   .ad-cu or is the one switch above it.
+
+   Two rules the whole block follows:
+   - Sample and sale are never told apart by colour alone. Each dot sits beside
+     the word, and a sample dot is mustard WITH a dark ring while a sale dot is
+     a solid green disc.
+   - Every grid track is minmax(0, …), and every scroll container is positioned,
+     for the reasons already written down at .ad-tablewrap. */
+
+/* The Orders | Customers switch. Two equal halves, because a phone gives them
+   no room to be anything else. */
+.ad-allswitch { margin: 16px 0 0; }
+.ad-allswitch .ad-filter { flex: 1 1 0; }
+
+/* ---- colour keys ---- */
+.ad-cu-dot {
+  display: inline-block;
+  width: 10px; height: 10px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: baseline;
+  flex: none;
+}
+.ad-cu-dot.is-sale   { background: var(--green-soft); }
+.ad-cu-dot.is-sample { background: var(--mustard); box-shadow: inset 0 0 0 1.5px var(--mustard-dk); }
+
+/* ---- filters ---- */
+.ad-cu-filters { margin-top: 14px; display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+.ad-cu-community.field { margin-bottom: 0; max-width: 420px; }
+/* Same small-caps label as the three chip groups under it. */
+.ad-cu-community.field label {
+  margin-bottom: 6px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.ad-cu-chiplabel {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--muted);
+}
+.ad-cu-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ad-cu-filterline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ad-cu-filterline b { color: var(--ink); }
+.ad-cu-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  background: none;
+  border: 0;
+  font-size: inherit;
+  color: var(--green);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ---- summary ---- */
+.ad-cu-hero .n { font-size: 34px; }
+.ad-cu-split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.ad-cu-split b { font-variant-numeric: tabular-nums; }
+.ad-cu-sizetable {
+  width: 100%;
+  /* Three short columns; stretched across a 1200px panel the numbers sit a
+     screen away from the size they belong to. */
+  max-width: 420px;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+}
+.ad-cu-sizetable caption {
+  text-align: left;
+  padding-bottom: 4px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--muted);
+}
+.ad-cu-sizetable th, .ad-cu-sizetable td {
+  padding: 7px 4px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+}
+.ad-cu-sizetable thead th { font-size: 11.5px; color: var(--muted); }
+.ad-cu-sizetable .num { text-align: right; }
+.ad-cu-sizetable tbody td { font-weight: 400; }
+.ad-cu-sizetable tbody tr:last-child th, .ad-cu-sizetable tbody tr:last-child td { border-bottom: 0; }
+
+/* ---- data notes ---- */
+.ad-cu-notes {
+  margin-top: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 0 15px;
+}
+.ad-cu-notes > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 0;
+  font-weight: 600;
+  font-size: 14.5px;
+  cursor: pointer;
+  list-style: none;
+}
+.ad-cu-notes > summary::-webkit-details-marker { display: none; }
+.ad-cu-notes > summary span { font-size: 12px; font-weight: 600; color: var(--mustard-dk); }
+.ad-cu-notes ul { list-style: none; margin: 0; padding: 2px 0 12px; }
+.ad-cu-notes li {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.ad-cu-notes li > span { min-width: 0; overflow-wrap: anywhere; }
+.ad-cu-ico { width: 15px; height: 15px; flex: none; margin-top: 2px; }
+.ad-cu-ico.is-warn { color: var(--mustard-dk); }
+.ad-cu-ico.is-crit { color: var(--danger); }
+.ad-cu-ico.is-info { color: var(--muted); }
+
+/* ---- charts ---- */
+.ad-cu-charts { margin-top: 18px; display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1024px) {
+  /* Cards in a row share a height, so the row reads as a row. */
+  .ad-cu-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ad-cu-card.is-wide { grid-column: 1 / -1; }
+}
+.ad-cu-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 14px 15px 15px;
+  min-width: 0;
+}
+.ad-cu-cardhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.ad-cu-cardhead > div { min-width: 0; }
+.ad-cu-cardhead h3 { font-size: 17px; line-height: 1.25; }
+.ad-cu-cardhead p { margin: 3px 0 0; font-size: 12px; line-height: 1.4; color: var(--muted); }
+.ad-cu-toggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px 12px;
+  background: none;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.ad-cu-toggle:hover { border-color: var(--green-soft); }
+
+/* A bar chart is one number axis, so every bar in a card shares one scale and
+   starts at zero. The track is only a faint guide; the fill is the data, with
+   its end (and only its end) rounded. */
+.ad-cu-bar {
+  display: grid;
+  grid-template-columns: minmax(96px, 40%) minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  font-size: 13px;
+}
+.ad-cu-bar .l { min-width: 0; overflow-wrap: anywhere; line-height: 1.25; color: var(--ink); }
+.ad-cu-bar .l small { display: block; margin-top: 1px; font-size: 11px; color: var(--muted); }
+.ad-cu-bar .track { display: block; height: 12px; background: #efeadb; border-radius: 0 4px 4px 0; }
+.ad-cu-bar .fill { display: block; height: 100%; border-radius: 0 4px 4px 0; }
+.ad-cu-bar .fill.is-sale   { background: var(--green-soft); }
+.ad-cu-bar .fill.is-sample { background: var(--mustard); box-shadow: inset 0 0 0 1.5px var(--mustard-dk); }
+.ad-cu-bar .v { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--green); }
+.ad-cu-group h4 { margin: 10px 0 2px; font-family: inherit; font-size: 13px; font-weight: 700; letter-spacing: 0; }
+.ad-cu-legend { display: flex; gap: 16px; margin-bottom: 2px; font-size: 12px; color: var(--muted); }
+.ad-cu-rule { height: 1px; margin: 8px 0; background: var(--line); }
+.ad-cu-fine { margin: 10px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.ad-cu-fine b { color: var(--ink); }
+.ad-cu-empty { margin: 8px 0 0; font-size: 13.5px; color: var(--muted); }
+
+/* the conversion strip: two segments sharing one bar, 100% = sampled customers */
+.ad-cu-seg { display: flex; gap: 3px; height: 26px; margin: 4px 0 12px; }
+.ad-cu-seg span { min-width: 6px; border-radius: 4px; }
+.ad-cu-seg .is-sale   { background: var(--green-soft); }
+.ad-cu-seg .is-sample { background: var(--mustard); box-shadow: inset 0 0 0 1.5px var(--mustard-dk); }
+.ad-cu-lines { display: grid; gap: 4px; font-size: 13.5px; }
+.ad-cu-lines > div { display: flex; align-items: baseline; }
+.ad-cu-lines b { margin-left: auto; padding-left: 10px; font-variant-numeric: tabular-nums; color: var(--green); }
+
+/* a chart's "table twin" */
+.ad-cu-minwrap { overflow-x: auto; position: relative; }
+.ad-cu-mini { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.ad-cu-mini th, .ad-cu-mini td {
+  padding: 8px 6px 8px 0;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.ad-cu-mini thead th { font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.ad-cu-mini tbody th { font-weight: 600; }
+
+/* ---- the customer table ----
+   Sticky first column, so the name stays beside whatever column you scrolled
+   to. The cells are opaque for the same reason: a transparent sticky cell
+   shows the columns sliding underneath it. */
+.ad-cu-tablehead { margin-top: 26px; }
+.ad-cu-table { width: max-content; min-width: 100%; }
+.ad-cu-table thead th {
+  padding: 0 2px;
+  vertical-align: bottom;
+  background: var(--cream);
+  white-space: normal;
+}
+.ad-cu-table thead th.ad-cu-grouphead {
+  padding: 8px 6px 4px;
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+  color: var(--green);
+  font-size: 12.5px;
+}
+.ad-cu-sort {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 4px 6px;
+  background: none;
+  border: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+.ad-cu-sort:hover { color: var(--green); }
+.ad-cu-table .num .ad-cu-sort { justify-content: flex-end; text-align: right; }
+.ad-cu-sort small {
+  display: block;
+  margin-top: 1px;
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.ad-cu-sort .arr { width: 10px; font-size: 9px; color: var(--green); }
+.ad-cu-sort .ad-cu-dot { margin-right: 0; }
+.ad-cu-table th[aria-sort="ascending"], .ad-cu-table th[aria-sort="descending"] { color: var(--green); }
+
+.ad-cu-table thead th:first-child,
+.ad-cu-table tbody th[scope="row"],
+.ad-cu-table tfoot th[scope="row"] {
+  position: sticky;
+  /* A sticky offset is measured from the scroll box's padded inner edge, and
+     .ad-tablewrap pads itself by the gutter. At left: 0 the column therefore
+     stopped one gutter short of the screen edge and the columns scrolling away
+     showed in the gap beside it — measured at 18px (375) and 40px (1280).
+     Pulling it out by exactly the gutter parks it on the real edge. */
+  left: calc(-1 * var(--ad-pad));
+  padding-left: 8px;
+  z-index: 1;
+  background: var(--cream);
+  box-shadow: 1px 0 0 var(--line);
+}
+.ad-cu-table thead th:first-child { z-index: 2; }
+.ad-cu-table tbody th[scope="row"] {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (min-width: 768px) { .ad-cu-table tbody th[scope="row"] { max-width: 220px; } }
+
+.ad-cu-sep td { padding: 0; background: #f1ecdc; border-bottom: 1px solid var(--line); }
+.ad-cu-sep td > span {
+  position: sticky;
+  left: 0;
+  display: inline-block;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ad-cu-yes { display: inline-flex; align-items: center; font-weight: 700; color: var(--ink); }
+.ad-cu-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 6px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 999px;
+  background: #fdecc8;
+  color: var(--cocoa);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.ad-cu-flag.is-crit { background: #f6e3de; color: var(--danger); }
+.ad-cu-flag .ad-cu-ico { margin-top: 0; }
+.ad-cu-table tfoot td, .ad-cu-table tfoot th { background: var(--cream); }

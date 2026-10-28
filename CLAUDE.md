@@ -888,6 +888,54 @@ writes exactly one thing.
     `.ad-prod-side .ad-note + .ad-note` rule keeps the two paragraphs apart at
     lg, where the first note's `margin-top: 0` would otherwise zero the second.
 
+#### Customers view (`app/admin/Customers.js`, `customers-stats.js`) — added 2026-10-28
+
+One row per **phone number**, built live from the order rows All Orders already
+holds, so a new order, a cancellation or a new pack size shows on the next
+Refresh with no rebuild. Read-only. It lives under **All Orders as an
+Orders | Customers switch**, not as a fifth tab: four tabs already barely fit a
+360px handset, and a switch left Dashboard / Production / Settings
+**pixel-identical** at 375 / 768 / 1280 (diffed against a build of the previous
+commit).
+
+- **The counting lives in `customers-stats.js`** (pure, no clock — "today" is
+  passed in, resolved through `settings.timezone`). Do not count in the
+  component. Checked against an independent Python calculation and against
+  `count(distinct phone)` in the database.
+- **Samples and sales are never blended.** Every pack count, order count and
+  date is held as a separate sample / sale value. "Sale" means `order_type =
+  'sale'`, **not** `payment_status = 'paid'`: a delivered sale still marked
+  pending is a sale, and the count of those is surfaced as a data note instead.
+  Cancelled orders are excluded from every figure.
+- **Conversion** = customers with ≥1 sale ÷ customers with ≥1 sample. The
+  "Conversion flag" column says **Yes = sample only, never bought** (the bad
+  state), as specified.
+- **Pack sizes come from the data.** Nothing lists 100 / 200 / 500; a 300g order
+  adds its own column group, filter chip and chart group. Tested with a
+  synthetic 300g.
+- **Blank last purchase sorts last in both directions** and is shown as its own
+  group under a separator row — never mixed in as "new".
+- **A phone under two names is flagged, never merged.** A sale dated before the
+  first sample is flagged as a data anomaly.
+- **`dbAll()` in `lib/admin.js` exists because PostgREST caps one response at
+  1000 rows and does not say it stopped.** A plain read of "all orders" quietly
+  becomes "the newest 1000" the day the business passes that number. `dbAll`
+  advances the offset by the rows actually received (so a lower server cap
+  cannot skip rows) and needs a unique column last in `order=`. `loadAllOrders`
+  uses it, which also fixes the Money panel's totals past 1000 orders.
+  Verified with a 2,654-order mock behind a 1000-row cap.
+- **`ALL_ORDERS_SELECT` gained `total, subtotal, delivery_name,
+  delivery_area_id`.** The last two are what let a customer's community follow
+  the order they actually placed rather than the saved record.
+- **Sticky first column: `left: calc(-1 * var(--ad-pad))`, not `0`.** A sticky
+  offset is measured from the scroll box's *padded* inner edge, and
+  `.ad-tablewrap` pads itself by the gutter, so `left: 0` parked the name 18px
+  (375) / 40px (1280) short of the screen edge with scrolled-away columns
+  showing in the gap.
+- Every control measured ≥ 44px at 360 / 375 / 768 / 1280 (with the notes open),
+  all text pairs ≥ 4.5:1, and the sample / sale distinction never rests on
+  colour alone (dot + word; the sample dot and bar carry a dark ring).
+
 ### Customer page — decisions that are load-bearing, not taste
 
 - **The four text fields in "Where should we deliver?" carry floating labels**
