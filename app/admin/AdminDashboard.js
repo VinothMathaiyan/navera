@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { currentSession, db, signIn, signOut, SessionExpired } from "../../lib/admin";
+import { currentSession, db, dbAll, signIn, signOut, SessionExpired } from "../../lib/admin";
 import { computeForecast } from "./forecast";
 import {
   isPending,
@@ -16,6 +16,7 @@ import Products from "./Products";
 import Areas from "./Areas";
 import Production from "./Production";
 import AllOrders from "./AllOrders";
+import Customers from "./Customers";
 import {
   nextDeliveryDates,
   nextStatus,
@@ -128,10 +129,15 @@ const ORDER_SELECT =
    of the Dashboard's one chosen delivery date. It also now feeds the Money
    panel (moved here from Dashboard — money is an all-time figure, so this is
    its natural home), which is why unit_price is asked for even though the
-   table itself never shows it: computeMoney needs it for sample value. */
+   table itself never shows it: computeMoney needs it for sample value.
+
+   The Customers view reads the same rows. It needs delivery_name (what was
+   typed for that order, which is how a phone appearing under two names is
+   noticed) and delivery_area_id (the community an order was placed under) —
+   neither is shown by All Orders, which simply ignores them. */
 const ALL_ORDERS_SELECT =
   "id,reference,delivery_date,created_at,status,source,order_type," +
-  "payment_status,payment_method,total,subtotal," +
+  "payment_status,payment_method,total,subtotal,delivery_name,delivery_area_id," +
   "customer:customers(name,phone,flat,area:delivery_areas(name))," +
   "items:order_items(quantity,weight_grams,unit_price)";
 
@@ -159,6 +165,9 @@ export default function AdminDashboard() {
   const [entryOpen, setEntryOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [view, setView] = useState("dashboard");
+  // Inside the All Orders tab: the order list, or the customers built from it.
+  // A switch rather than a fifth tab — four already barely fit a 360px handset.
+  const [allMode, setAllMode] = useState("orders");
   const [unpaidOnly, setUnpaidOnly] = useState(false);
 
   // localStorage can only be read after mount, or server and client HTML differ.
@@ -288,8 +297,11 @@ export default function AdminDashboard() {
   const loadAllOrders = useCallback(async () => {
     if (!session) return;
     try {
-      const rows = await db(
-        `orders?select=${ALL_ORDERS_SELECT}&order=delivery_date.desc,created_at.desc`
+      // dbAll, not db: this list feeds the Money panel and the Customers view,
+      // whose totals are only true if every order is in it. id.asc makes the
+      // order total, which paging needs.
+      const rows = await dbAll(
+        `orders?select=${ALL_ORDERS_SELECT}&order=delivery_date.desc,created_at.desc,id.asc`
       );
       setAllOrders(rows ?? []);
     } catch (e) {
@@ -433,12 +445,40 @@ export default function AdminDashboard() {
       ) : view === "all" ? (
         <div className="ad-wrap">
           {error && <div className="ad-err">{error}</div>}
-          <AllOrders
-            orders={allOrders}
-            settings={settings}
-            loading={loading}
-            onRefresh={reloadAll}
-          />
+          <div className="ad-filters ad-allswitch" role="group" aria-label="Show">
+            <button
+              type="button"
+              className="ad-filter"
+              aria-pressed={allMode === "orders"}
+              onClick={() => setAllMode("orders")}
+            >
+              Orders
+            </button>
+            <button
+              type="button"
+              className="ad-filter"
+              aria-pressed={allMode === "customers"}
+              onClick={() => setAllMode("customers")}
+            >
+              Customers
+            </button>
+          </div>
+          {allMode === "customers" ? (
+            <Customers
+              orders={allOrders}
+              settings={settings}
+              loading={loading}
+              onRefresh={reloadAll}
+              onExpired={dropToLogin}
+            />
+          ) : (
+            <AllOrders
+              orders={allOrders}
+              settings={settings}
+              loading={loading}
+              onRefresh={reloadAll}
+            />
+          )}
         </div>
       ) : (
       <div className="ad-wrap">
