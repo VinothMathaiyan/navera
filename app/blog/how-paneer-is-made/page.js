@@ -30,7 +30,7 @@ const STEPS = [
   },
   {
     title: "Gentle heating",
-    body: "We heat the milk to 95°C and hold it there for a few minutes to remove harmful bacteria. We stir as it heats, so it never sticks or scorches.",
+    body: "We heat the milk to 95°C and hold it there for 5 minutes to reduce harmful bacteria. We stir as it heats, so it never sticks or scorches.",
   },
   {
     title: "Fresh lemon",
@@ -75,8 +75,8 @@ export default async function HowPaneerIsMadePost() {
         <section aria-labelledby="two">
           <h2 id="two">Just two ingredients</h2>
           <p>
-            Fresh milk from free-roaming cared cows, around 100 km away from
-            Chennai, and fresh lemon juice. Nothing more. No vinegar, no
+            Fresh milk from village cows raised with care, around 100 km away
+            from Chennai, and fresh lemon juice. Nothing more. No vinegar, no
             preservatives, no additives.
           </p>
         </section>
@@ -108,10 +108,11 @@ export default async function HowPaneerIsMadePost() {
         <section className="bl-made" aria-labelledby="clean">
           <h2 id="clean">Kept clean at every step</h2>
           <p>
-            Everything that touches the milk, the lemon juice, the curds and the
-            paneer is stainless steel. We wash our hands, wear gloves, a hair
-            cover and an apron, and we clean and sanitise all equipment and
-            cloths after every batch.
+            We use stainless-steel equipment and clean, food-grade cloths and
+            pouches. We wash our hands, wear gloves, a hair cover and an apron,
+            and we clean and sanitise all equipment and cloths after every
+            batch. Heating is only one part of keeping paneer safe. Clean hands,
+            clean equipment and keeping the paneer cold matter just as much.
           </p>
           <p>
             Because there are no preservatives, we make your paneer only after
