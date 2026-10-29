@@ -907,9 +907,23 @@ commit).
   'sale'`, **not** `payment_status = 'paid'`: a delivered sale still marked
   pending is a sale, and the count of those is surfaced as a data note instead.
   Cancelled orders are excluded from every figure.
-- **Conversion** = customers with ≥1 sale ÷ customers with ≥1 sample. The
-  "Conversion flag" column says **Yes = sample only, never bought** (the bad
-  state), as specified.
+- **The conversion rate, its chart and three table columns were removed on
+  2026-10-29** at the founder's call: they were not giving the insight wanted.
+  Gone: the "Sample-to-sale conversion" hero figure and chart card, and the
+  **Last activity**, **Conversion flag** and **Data flags** columns (Last
+  activity always equalled Last purchase for nearly everyone). Last purchase,
+  Days since last purchase and the recency buckets stay. The "Sample only"
+  filter stays — it is the list of who has had a sample and not bought — and so
+  do the Data notes under the summary, which still say when a phone has two
+  names or a sale predates a sample. The four remaining charts sit as a 2×2
+  grid; the top-customers card is no longer full-width for that reason. Do not
+  bring the rate back without asking.
+- **Identity.** A customer is name + flat + phone together, never a name alone.
+  Rows are grouped by **phone**, which is the same thing for every saved
+  customer because `customers.phone` is unique. Two people called Aishwarya
+  (F304, 8056812372 and F301, 8637698827) are two rows and must stay two. A
+  stale duplicate (7010080911, also F304) was merged into the F304 record and
+  deleted on 2026-10-29 — its three orders were moved, none were lost.
 - **Pack sizes come from the data.** Nothing lists 100 / 200 / 500; a 300g order
   adds its own column group, filter chip and chart group. Tested with a
   synthetic 300g.

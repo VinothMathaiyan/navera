@@ -10,8 +10,12 @@
 //
 //  * Samples and sales are never blended. Every pack count, order count and
 //    date is kept as a separate sample / sale value from the order up.
-//  * Unique customer = phone number. If one phone shows up under more than one
-//    name it is FLAGGED, never merged.
+//  * Unique customer = phone number. customers.phone is unique in the database,
+//    so for every saved customer this is the same thing as name + flat + phone
+//    together; a name on its own is NEVER an identity. Two people called
+//    Aishwarya on different phones (F304 and F301) are two rows and stay two
+//    rows. If one phone shows up under more than one name it is FLAGGED, never
+//    merged.
 //  * Cancelled orders are left out of every count and every date. They are a
 //    record of something that did not happen.
 //  * Dates are the order's delivery_date, a plain YYYY-MM-DD calendar string,
@@ -178,8 +182,8 @@ export function buildCustomerModel(orders, { areaNames = {}, today } = {}) {
       lastSale,
       daysSince,
       lastActivity,
-      // The conversion flag, exactly as specified: received a sample, no paid
-      // sale. "Yes" here is the BAD state — they have not converted.
+      // Received a sample, no paid sale. Not a column any more; it drives the
+      // "Sample only" filter, which is the list of who has not bought yet.
       sampleOnly: samples.length > 0 && sales.length === 0,
       flags,
       bucket: bucketFor(lastSale, daysSince),
@@ -233,7 +237,7 @@ export function matchesFilters(r, f) {
 /* ------------------------------------------------ summary and charts */
 
 export function summarize(rows, sizes) {
-  const s = { customers: rows.length, ordSample: 0, ordSale: 0, packSample: 0, packSale: 0, bySize: {}, sampled: 0, converted: 0, rate: null };
+  const s = { customers: rows.length, ordSample: 0, ordSale: 0, packSample: 0, packSale: 0, bySize: {} };
   sizes.forEach((g) => { s.bySize[g] = { sample: 0, sale: 0 }; });
   for (const r of rows) {
     s.ordSample += r.sampleOrders;
@@ -244,15 +248,7 @@ export function summarize(rows, sizes) {
       if (r.bySize[g].sample > 0) s.bySize[g].sample++;
       if (r.bySize[g].sale > 0) s.bySize[g].sale++;
     }
-    if (r.sampleOrders > 0) {
-      s.sampled++;
-      if (r.paidOrders > 0) s.converted++;
-    }
   }
-  // Of the customers who had a sample, the share who have bought. The
-  // denominator is sampled customers only; a customer who bought without ever
-  // sampling is not part of this ratio.
-  s.rate = s.sampled ? (100 * s.converted) / s.sampled : null;
   return s;
 }
 
@@ -283,8 +279,8 @@ export function topByPaidPacks(rows, n = 10) {
 
 /* ------------------------------------------------ sorting */
 
-// Sort keys: any row field, "s:<grams>:sample" / "s:<grams>:sale" for a pack
-// column, and "flagCount". Blank values (no sale yet, no sample, ...) ALWAYS
+// Sort keys: any row field, and "s:<grams>:sample" / "s:<grams>:sale" for a
+// pack column. Blank values (no sale yet, no sample, ...) ALWAYS
 // sort to the bottom whichever way the column is turned, so a customer who has
 // never purchased is grouped at the end and never mistaken for a new one.
 export function sortValue(r, key) {
@@ -292,8 +288,6 @@ export function sortValue(r, key) {
     const [, g, t] = key.split(":");
     return r.bySize[g]?.[t] ?? 0;
   }
-  if (key === "sampleOnly") return r.sampleOnly ? 1 : 0;
-  if (key === "flagCount") return r.flags.length;
   const v = r[key];
   return v === undefined ? null : v;
 }
