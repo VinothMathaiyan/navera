@@ -6,6 +6,13 @@
 
 export const POSTS = [
   {
+    slug: "how-paneer-is-made",
+    title: "How your paneer is made, from fresh milk to your door",
+    date: "2026-10-29",
+    summary:
+      "Six simple steps from fresh milk and fresh lemon to the paneer at your door.",
+  },
+  {
     slug: "paneer-texture",
     title: "Soft, medium-firm or firm? How do you like your paneer?",
     // Publish date, as YYYY-MM-DD. Shown on the index and used by <time>.
