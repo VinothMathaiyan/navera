@@ -119,6 +119,33 @@
 
 .bl-note { font-size: 15px; color: var(--muted); }
 
+/* The numbered journey on "How your paneer is made". The number is decorative
+   (aria-hidden); the heading carries a screen-reader-only "Step N". */
+.bl-steps { list-style: none; margin: 20px 0 14px; padding: 0; display: grid; gap: 14px; }
+.bl-step {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 18px;
+}
+.bl-step h3 { margin: 0 0 4px; }
+.bl-step p { margin: 0; font-size: 16px; }
+.bl-num {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--green);
+  color: #fff;
+  font-weight: 700;
+  font-size: 19px;
+  line-height: 40px;
+  text-align: center;
+}
+
 .bl-factors { margin: 16px 0; }
 .bl-factors dt { margin-top: 14px; font-weight: 600; color: var(--green); }
 .bl-factors dd {
