@@ -10,8 +10,9 @@
 // checked without rendering this.
 //
 // Samples and sales are never blended anywhere on this screen: every figure
-// has a sample value and a sale value, and the conversion flag is the one place
-// they meet — on purpose, and named for what it means.
+// has a sample value and a sale value. (The sample-to-sale conversion rate, its
+// chart and the Conversion flag / Data flags / Last activity columns were
+// removed on 2026-10-29 — they were not giving the insight wanted.)
 
 import { useEffect, useMemo, useState } from "react";
 import { db, SessionExpired } from "../../lib/admin";
@@ -50,7 +51,6 @@ function todayISO(timezone) {
   }
 }
 
-const pct = (x) => `${Math.round(x * 10) / 10}%`;
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
 const TYPE_OPTIONS = [
@@ -68,7 +68,6 @@ const SEP_LABEL = {
   daysSince: "No paid purchase yet",
   firstSale: "No paid purchase yet",
   firstSample: "No sample received",
-  lastActivity: "No orders",
 };
 
 /* ------------------------------------------------ small pieces */
@@ -275,9 +274,6 @@ export default function Customers({ orders, settings, loading, onRefresh, onExpi
     { key: "firstSale", label: "First purchase", kind: "str" },
     { key: "lastSale", label: "Last purchase", kind: "str" },
     { key: "daysSince", label: "Days since last purchase", num: true },
-    { key: "lastActivity", label: "Last activity", kind: "str" },
-    { key: "sampleOnly", label: "Conversion flag", sub: "Yes = sample only" },
-    { key: "flagCount", label: "Data flags" },
   ];
   const nCols = baseCols.length + sizeGroups.length * 2 + restCols.length;
   const sortLabel = [...baseCols, ...sizeGroups.flatMap((g) => g.cols.map((c) => ({ ...c, label: `${g.label} ${c.label.toLowerCase()}` }))), ...restCols].find((c) => c.key === sort.key)?.label ?? sort.key;
@@ -290,9 +286,6 @@ export default function Customers({ orders, settings, loading, onRefresh, onExpi
   const totalOf = (key) => sorted.reduce((t, r) => t + Number(sortValue(r, key) ?? 0), 0);
 
   /* ---- charts ---- */
-  const sampled = shown.filter((r) => r.sampleOrders > 0);
-  const converted = sampled.filter((r) => r.paidOrders > 0);
-  const sampleOnlyRows = sampled.filter((r) => r.paidOrders === 0);
   const freq = frequencyCounts(shown);
   const freqRows = [
     ["1 paid order", freq.one],
@@ -380,13 +373,6 @@ export default function Customers({ orders, settings, loading, onRefresh, onExpi
           <span className="ad-money-scope">{dirty ? "filtered" : "all customers"}</span>
         </div>
         <div className="ad-money-row">
-          <div className="ad-money-fig is-wide ad-cu-hero">
-            <div className="n">{sum.rate === null ? "—" : pct(sum.rate)}</div>
-            <div className="l">
-              sample-to-sale conversion
-              {sum.sampled ? `: ${sum.converted} of ${sum.sampled} customers who got a sample have bought` : ": no sample customers in this view"}
-            </div>
-          </div>
           <div className="ad-money-fig">
             <div className="n">{sum.customers}</div>
             <div className="l">unique customers, by phone</div>
@@ -452,53 +438,12 @@ export default function Customers({ orders, settings, loading, onRefresh, onExpi
           )}
           <li>{ICON.info}<span><b>{plural(n.cancelled, "cancelled order")} left out</b> of every count and date. Dates are delivery dates.</span></li>
           <li>{ICON.info}<span><b>Pack sizes found:</b> {model.sizes.length ? model.sizes.map((g) => `${g}g`).join(", ") : "none"}. Columns and filters follow whatever sizes appear.</span></li>
-          <li>{ICON.info}<span><b>Conversion rate</b> is customers with a sample and at least one sale, divided by customers with a sample. Filters choose customers; each customer&apos;s own figures stay complete. These notes cover everyone.</span></li>
+          <li>{ICON.info}<span>Filters choose customers; each customer&apos;s own figures stay complete. These notes cover everyone.</span></li>
         </ul>
       </details>
 
       {/* charts */}
       <div className="ad-cu-charts">
-        <ChartCard
-          id="conv"
-          title="Sample-to-sale conversion"
-          sub="Customers who received a sample"
-          showTable={!!tables.conv}
-          onToggle={toggleTable}
-          cols={["Group", "Customers", "Share"]}
-          rows={
-            sampled.length
-              ? [
-                  ["Bought after a sample", converted.length, pct((100 * converted.length) / sampled.length)],
-                  ["Sample only, not bought", sampleOnlyRows.length, pct((100 * sampleOnlyRows.length) / sampled.length)],
-                ]
-              : [["No sampled customers", 0, ""]]
-          }
-        >
-          {sampled.length === 0 ? (
-            <p className="ad-cu-empty">No customers with a sample in this view.</p>
-          ) : (
-            <>
-              <div className="ad-cu-seg" role="img" aria-label={`${converted.length} of ${sampled.length} sampled customers have bought`}>
-                {converted.length > 0 && <span className="is-sale" style={{ flex: converted.length }} />}
-                {sampleOnlyRows.length > 0 && <span className="is-sample" style={{ flex: sampleOnlyRows.length }} />}
-              </div>
-              <div className="ad-cu-lines">
-                <div><Dot kind="sale" />Bought after a sample<b>{converted.length} ({pct((100 * converted.length) / sampled.length)})</b></div>
-                <div><Dot kind="sample" />Sample only, not bought<b>{sampleOnlyRows.length} ({pct((100 * sampleOnlyRows.length) / sampled.length)})</b></div>
-              </div>
-              {sampleOnlyRows.length > 0 ? (
-                <p className="ad-cu-fine">
-                  <b>Not yet bought:</b>{" "}
-                  {sampleOnlyRows.slice(0, 6).map((r) => `${r.name} (${r.phone.slice(-4)})`).join(", ")}
-                  {sampleOnlyRows.length > 6 ? ` and ${sampleOnlyRows.length - 6} more` : ""}
-                </p>
-              ) : (
-                <p className="ad-cu-fine">Every sampled customer has bought.</p>
-              )}
-            </>
-          )}
-        </ChartCard>
-
         <ChartCard
           id="size"
           title="Customers by pack size"
@@ -558,7 +503,6 @@ export default function Customers({ orders, settings, loading, onRefresh, onExpi
           sub="Packs bought across all sizes, samples excluded"
           showTable={!!tables.top}
           onToggle={toggleTable}
-          wide
           cols={["Customer", "Phone", "Paid packs", "By size"]}
           rows={top.map((r) => [r.name, r.phone, r.packsSale, sizeTxt(r)])}
         >
@@ -628,22 +572,6 @@ export default function Customers({ orders, settings, loading, onRefresh, onExpi
                     <td>{fmtDate(r.firstSale)}</td>
                     <td>{fmtDate(r.lastSale)}</td>
                     <td className="num">{r.daysSince === null ? "" : r.daysSince}</td>
-                    <td>{fmtDate(r.lastActivity)}</td>
-                    <td>
-                      {r.sampleOnly ? (
-                        <span className="ad-cu-yes"><Dot kind="sample" />Yes</span>
-                      ) : (
-                        <span className="soft">No</span>
-                      )}
-                    </td>
-                    <td>
-                      {r.flags.map((f) => (
-                        <span key={f.code} className={`ad-cu-flag is-${f.sev}`} title={f.detail}>
-                          {f.sev === "crit" ? ICON.crit : ICON.warn}
-                          {f.label}
-                        </span>
-                      ))}
-                    </td>
                   </tr>
                 );
                 return out;
