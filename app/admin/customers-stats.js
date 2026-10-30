@@ -23,7 +23,7 @@
 //    Date(iso)` against the local zone, which can slide a day.
 //  * "Paid order" means an order tagged Sale, as the business reckons it. It is
 //    NOT filtered on payment_status: a delivered sale still marked 'pending' is
-//    a sale. The count of those is surfaced as a note instead.
+//    a sale. Payment is tracked on the All Orders tab, not here.
 //  * Pack sizes are whatever the data contains. Nothing here lists 100 / 200 /
 //    500, so a new pack appears as a new column group with no code change.
 
@@ -137,8 +137,8 @@ export function buildCustomerModel(orders, { areaNames = {}, today } = {}) {
     const firstSale = lo(dateOf(sales));
     const lastSale = hi(dateOf(sales));
     const lastActivity = hi(dateOf(mine));
-    // Floored at 0: an order dated after "today" is a data oddity (flagged in
-    // the notes), and "-3 days since last purchase" would only add to it.
+    // Floored at 0: an order dated after "today" is an upcoming delivery, and
+    // it must not read as "-3 days since last purchase".
     const daysSince = lastSale === null ? null : Math.max(0, todayN - dayNum(lastSale));
 
     const packsSample = sizes.reduce((t, g) => t + bySize[g].sample, 0);
@@ -191,23 +191,19 @@ export function buildCustomerModel(orders, { areaNames = {}, today } = {}) {
   }
 
   // Whole-dataset notes. These do not follow the table's filters.
-  const sameName = new Map();
-  rows.forEach((r) => {
-    const k = norm(r.name);
-    if (!k || k === "(no name)") return;
-    if (!sameName.has(k)) sameName.set(k, []);
-    sameName.get(k).push(r);
-  });
+  //
+  // Only things that are WRONG when they appear, so the notes stay empty on a
+  // healthy day: a phone under two names, a sale dated before its sample, an
+  // unreadable date. Counts that are true of any working week (unpaid sales,
+  // orders dated for an upcoming delivery, older orders not yet closed, two
+  // customers sharing a name) were reviewed on 2026-10-30 and taken out — they
+  // would otherwise sit there permanently and teach the reader to ignore the box.
   const hasFlag = (r, code) => r.flags.some((f) => f.code === code);
 
   const notes = {
     cancelled: all.length - active.length,
-    unpaidSales: active.filter((o) => o.type === "sale" && o.pay !== "paid").length,
-    staleOpen: active.filter((o) => ["confirmed", "preparing", "dispatched"].includes(o.status) && o.date !== null && o.date < today).length,
-    future: active.filter((o) => o.date !== null && o.date > today).length,
     multiName: rows.filter((r) => hasFlag(r, "multi_name")).map((r) => ({ phone: r.phone, text: r.flags.find((f) => f.code === "multi_name").detail })),
     anomalies: rows.filter((r) => hasFlag(r, "sale_before_sample")),
-    sameName: [...sameName.values()].filter((g) => g.length > 1),
     badDates,
   };
 

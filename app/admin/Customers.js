@@ -303,7 +303,7 @@ export default function Customers({ orders, settings, loading, onRefresh, onExpi
 
   /* ---- notes (the whole dataset, whatever the filters say) ---- */
   const n = model.notes;
-  const flagged = n.multiName.length + n.anomalies.length + (n.unpaidSales ? 1 : 0) + (n.staleOpen ? 1 : 0) + (n.future ? 1 : 0) + n.badDates.length;
+  const flagged = n.multiName.length + n.anomalies.length + n.badDates.length;
 
   if (!orders || orders.length === 0) {
     return (
@@ -411,34 +411,18 @@ export default function Customers({ orders, settings, loading, onRefresh, onExpi
           Data notes <span>{flagged ? `${flagged} to look at` : "nothing to flag"}</span>
         </summary>
         <ul>
-          {n.multiName.length ? (
+          {n.multiName.length > 0 && (
             <li>{ICON.warn}<span><b>One phone, more than one name.</b> {n.multiName.map((m) => `${m.phone}: ${m.text}`).join(" ")}</span></li>
-          ) : (
-            <li>{ICON.info}<span><b>One phone, one name.</b> No phone number appears under more than one name.</span></li>
           )}
-          {n.anomalies.length ? (
+          {n.anomalies.length > 0 && (
             <li>{ICON.crit}<span><b>Sale dated before sample.</b> {n.anomalies.map((r) => `${r.name} (${r.phone})`).join(", ")}.</span></li>
-          ) : (
-            <li>{ICON.info}<span><b>No sale dated before a sample.</b> Every customer with both has a first sample on or before their first sale.</span></li>
-          )}
-          {n.sameName.length > 0 && (
-            <li>{ICON.info}<span><b>Same name, different phones, kept separate:</b> {n.sameName.map((g) => `${g[0].name} ×${g.length} (${g.map((r) => r.phone).join(", ")})`).join("; ")}.</span></li>
-          )}
-          {n.unpaidSales > 0 && (
-            <li>{ICON.warn}<span><b>{plural(n.unpaidSales, "sale order")} not yet marked paid.</b> They are tagged Sale, so they count as paid orders here. Their payment status is still pending.</span></li>
-          )}
-          {n.staleOpen > 0 && (
-            <li>{ICON.warn}<span><b>{plural(n.staleOpen, "order")} dated before today still show confirmed, preparing or dispatched.</b> They are counted, since they are not cancelled.</span></li>
-          )}
-          {n.future > 0 && (
-            <li>{ICON.warn}<span><b>{plural(n.future, "order")} dated after today.</b> Counted as orders; days since last purchase shows 0.</span></li>
           )}
           {n.badDates.length > 0 && (
             <li>{ICON.crit}<span><b>Unreadable dates on {n.badDates.join(", ")}.</b> Those orders are counted but have no date.</span></li>
           )}
           <li>{ICON.info}<span><b>{plural(n.cancelled, "cancelled order")} left out</b> of every count and date. Dates are delivery dates.</span></li>
           <li>{ICON.info}<span><b>Pack sizes found:</b> {model.sizes.length ? model.sizes.map((g) => `${g}g`).join(", ") : "none"}. Columns and filters follow whatever sizes appear.</span></li>
-          <li>{ICON.info}<span>Filters choose customers; each customer&apos;s own figures stay complete. These notes cover everyone.</span></li>
+          <li>{ICON.info}<span>Filters choose which customers are shown; each customer&apos;s own figures stay complete.</span></li>
         </ul>
       </details>
 
