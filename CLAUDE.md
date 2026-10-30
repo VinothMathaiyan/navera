@@ -905,17 +905,29 @@ commit).
 - **Samples and sales are never blended.** Every pack count, order count and
   date is held as a separate sample / sale value. "Sale" means `order_type =
   'sale'`, **not** `payment_status = 'paid'`: a delivered sale still marked
-  pending is a sale, and the count of those is surfaced as a data note instead.
+  pending is a sale. Payment is tracked on the All Orders tab, not here.
   Cancelled orders are excluded from every figure.
+- **Data notes (under the summary) only say what is WRONG, and are empty on a
+  healthy day.** Rebuilt 2026-10-30 after the founder reviewed them. Gone, on
+  purpose: "N sale orders not yet marked paid", "N orders dated before today
+  still open", "N orders dated after today", "same name, different phones" and
+  the two all-clear lines ("one phone, one name", "no sale before a sample").
+  The first three are true of any working week — an upcoming delivery is just
+  a customer who ordered ahead — so as permanent notes they would never clear
+  and would teach the reader to ignore the box. **What is left:** three
+  warnings that appear only when they fire (a phone under two names, a sale
+  dated before its sample, an unreadable date) and three explainer lines
+  (cancelled orders left out, pack sizes found, how filters behave). The header
+  reads "nothing to flag" unless one of the three warnings is showing. Do not
+  put a count of ordinary business state back in here without asking.
 - **The conversion rate, its chart and three table columns were removed on
   2026-10-29** at the founder's call: they were not giving the insight wanted.
   Gone: the "Sample-to-sale conversion" hero figure and chart card, and the
   **Last activity**, **Conversion flag** and **Data flags** columns (Last
   activity always equalled Last purchase for nearly everyone). Last purchase,
   Days since last purchase and the recency buckets stay. The "Sample only"
-  filter stays — it is the list of who has had a sample and not bought — and so
-  do the Data notes under the summary, which still say when a phone has two
-  names or a sale predates a sample. The four remaining charts sit as a 2×2
+  filter stays — it is the list of who has had a sample and not bought. The
+  four remaining charts sit as a 2×2
   grid; the top-customers card is no longer full-width for that reason. Do not
   bring the rate back without asking.
 - **Identity.** A customer is name + flat + phone together, never a name alone.
