@@ -907,7 +907,15 @@ commit).
   'sale'`, **not** `payment_status = 'paid'`: a delivered sale still marked
   pending is a sale. Payment is tracked on the All Orders tab, not here.
   Cancelled orders are excluded from every figure.
-- **Data notes (under the summary) only say what is WRONG, and are empty on a
+- **Data notes sit at the very bottom of the view, below the table** (moved
+  2026-10-30 at the founder's request: they are for checking the data, not for
+  reading before the figures). The box is rendered after both the table and the
+  "no customers match" message, so it is last in either state; `.ad-cu-notes`
+  carries `margin-top: 22px` for that position. Measured at 375 / 768 / 1280:
+  it is the section's last child, no sideways scroll, summary row 44px. The
+  trade-off is deliberate: a warning that fires is now below the fold, so the
+  header's "N to look at" is only seen by scrolling down.
+- **Data notes only say what is WRONG, and are empty on a
   healthy day.** Rebuilt 2026-10-30 after the founder reviewed them. Gone, on
   purpose: "N sale orders not yet marked paid", "N orders dated before today
   still open", "N orders dated after today", "same name, different phones" and

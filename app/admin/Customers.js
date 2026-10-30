@@ -405,27 +405,6 @@ export default function Customers({ orders, settings, loading, onRefresh, onExpi
         </div>
       </section>
 
-      {/* notes */}
-      <details className="ad-cu-notes" open={notesOpen} onToggle={(e) => setNotesOpen(e.currentTarget.open)}>
-        <summary>
-          Data notes <span>{flagged ? `${flagged} to look at` : "nothing to flag"}</span>
-        </summary>
-        <ul>
-          {n.multiName.length > 0 && (
-            <li>{ICON.warn}<span><b>One phone, more than one name.</b> {n.multiName.map((m) => `${m.phone}: ${m.text}`).join(" ")}</span></li>
-          )}
-          {n.anomalies.length > 0 && (
-            <li>{ICON.crit}<span><b>Sale dated before sample.</b> {n.anomalies.map((r) => `${r.name} (${r.phone})`).join(", ")}.</span></li>
-          )}
-          {n.badDates.length > 0 && (
-            <li>{ICON.crit}<span><b>Unreadable dates on {n.badDates.join(", ")}.</b> Those orders are counted but have no date.</span></li>
-          )}
-          <li>{ICON.info}<span><b>{plural(n.cancelled, "cancelled order")} left out</b> of every count and date. Dates are delivery dates.</span></li>
-          <li>{ICON.info}<span><b>Pack sizes found:</b> {model.sizes.length ? model.sizes.map((g) => `${g}g`).join(", ") : "none"}. Columns and filters follow whatever sizes appear.</span></li>
-          <li>{ICON.info}<span>Filters choose which customers are shown; each customer&apos;s own figures stay complete.</span></li>
-        </ul>
-      </details>
-
       {/* charts */}
       <div className="ad-cu-charts">
         <ChartCard
@@ -579,6 +558,29 @@ export default function Customers({ orders, settings, loading, onRefresh, onExpi
           </table>
         </div>
       )}
+
+      {/* notes — last on the page on purpose: they are for checking the data,
+          not for reading before the figures. Rendered after both the table and
+          the "no customers match" message so they are always at the bottom. */}
+      <details className="ad-cu-notes" open={notesOpen} onToggle={(e) => setNotesOpen(e.currentTarget.open)}>
+        <summary>
+          Data notes <span>{flagged ? `${flagged} to look at` : "nothing to flag"}</span>
+        </summary>
+        <ul>
+          {n.multiName.length > 0 && (
+            <li>{ICON.warn}<span><b>One phone, more than one name.</b> {n.multiName.map((m) => `${m.phone}: ${m.text}`).join(" ")}</span></li>
+          )}
+          {n.anomalies.length > 0 && (
+            <li>{ICON.crit}<span><b>Sale dated before sample.</b> {n.anomalies.map((r) => `${r.name} (${r.phone})`).join(", ")}.</span></li>
+          )}
+          {n.badDates.length > 0 && (
+            <li>{ICON.crit}<span><b>Unreadable dates on {n.badDates.join(", ")}.</b> Those orders are counted but have no date.</span></li>
+          )}
+          <li>{ICON.info}<span><b>{plural(n.cancelled, "cancelled order")} left out</b> of every count and date. Dates are delivery dates.</span></li>
+          <li>{ICON.info}<span><b>Pack sizes found:</b> {model.sizes.length ? model.sizes.map((g) => `${g}g`).join(", ") : "none"}. Columns and filters follow whatever sizes appear.</span></li>
+          <li>{ICON.info}<span>Filters choose which customers are shown; each customer&apos;s own figures stay complete.</span></li>
+        </ul>
+      </details>
     </section>
   );
 }
