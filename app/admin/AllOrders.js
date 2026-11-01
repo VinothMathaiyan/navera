@@ -80,6 +80,11 @@ function community(customer) {
   return area || flat || "—";
 }
 
+// The community an order sits under: the same value the Community column
+// prints, so the filter and the table can never disagree about who is in it.
+// Empty string when an order has none, which the filter simply never matches.
+const areaOf = (o) => o.customer?.area?.name ?? "";
+
 function paymentText(order) {
   if (order.order_type === "sample") return "—";
   if (order.payment_status === "paid") {
@@ -150,6 +155,10 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
   // string means that end of the range is open.
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  // Community name, or "" for every community. Held by name rather than id
+  // because the options are read off the orders themselves — that way a
+  // community switched off since its last order is still there to pick.
+  const [areaFilter, setAreaFilter] = useState("");
   const timezone = settings?.timezone ?? "Asia/Kolkata";
   const list = orders ?? [];
 
@@ -158,24 +167,58 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
       (!fromDate || o.delivery_date >= fromDate) && (!toDate || o.delivery_date <= toDate);
   }, [fromDate, toDate]);
 
-  // Counts are computed after the date range but before the status filter,
-  // so the chips always show "how many of each status in the dates I've
-  // picked" rather than a stale all-time count.
   const dateFiltered = useMemo(() => list.filter(inRange), [list, inRange]);
 
+  // The community picker. Options come from every order ever placed, so the one
+  // currently selected is always still in the list however the other filters
+  // move. The counts beside each name follow the date range and the status
+  // chips — "how many in this community, given everything else I've picked" —
+  // and deliberately not the community choice itself.
+  const areaFacets = useMemo(() => {
+    const tally = new Map();
+    for (const o of list) {
+      const n = areaOf(o);
+      if (n && !tally.has(n)) tally.set(n, 0);
+    }
+    let total = 0;
+    for (const o of dateFiltered) {
+      if (statusFilter.length > 0 && !statusFilter.includes(o.status)) continue;
+      total += 1;
+      const n = areaOf(o);
+      if (n) tally.set(n, tally.get(n) + 1);
+    }
+    return {
+      total,
+      options: [...tally.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+    };
+  }, [list, dateFiltered, statusFilter]);
+
+  // If the chosen community has no orders left at all (the last one deleted,
+  // say), fall back to everyone rather than showing an empty table under a
+  // picker that no longer has that name in it.
+  const activeArea = areaFacets.options.some(([n]) => n === areaFilter) ? areaFilter : "";
+
+  // Date range, then community. Counts are computed after both but before the
+  // status filter, so the chips always show "how many of each status in the
+  // dates and community I've picked" rather than a stale all-time count.
+  const areaScoped = useMemo(
+    () => (activeArea ? dateFiltered.filter((o) => areaOf(o) === activeArea) : dateFiltered),
+    [dateFiltered, activeArea]
+  );
+
   const counts = useMemo(() => {
-    const c = { all: dateFiltered.length };
+    const c = { all: areaScoped.length };
     for (const s of STATUS_ORDER) c[s] = 0;
-    for (const o of dateFiltered) c[o.status] = (c[o.status] ?? 0) + 1;
+    for (const o of areaScoped) c[o.status] = (c[o.status] ?? 0) + 1;
     return c;
-  }, [dateFiltered]);
+  }, [areaScoped]);
 
   const shown = useMemo(
     () =>
       statusFilter.length === 0
-        ? dateFiltered
-        : dateFiltered.filter((o) => statusFilter.includes(o.status)),
-    [dateFiltered, statusFilter]
+        ? areaScoped
+        : areaScoped.filter((o) => statusFilter.includes(o.status)),
+    [areaScoped, statusFilter]
   );
 
   const hasRange = fromDate || toDate;
@@ -185,8 +228,9 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
   // meaning" depending on which chip was pressed. jn asked for the opposite:
   // these figures should answer "how did the slice I've filtered to do,"
   // which is what you're looking at the moment you've picked a date range or
-  // a status. Scoped to `shown` — the same date-range + status filter as the
-  // table below and the CSV export — so the number here always matches what
+  // a status or a community. Scoped to `shown` — the same date-range +
+  // community + status filter as the table below and the CSV export — so the
+  // number here always matches what
   // you're looking at. Clearing every filter still gets you the all-time
   // figure, because `shown` then equals `list`; nothing is lost, and the
   // scope label below always names exactly what's included so it can't be
@@ -198,11 +242,12 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
     const parts = [];
     if (statusFilter.length > 0)
       parts.push(statusFilter.map((s) => STATUS_LABEL[s] ?? s).join(" + "));
+    if (activeArea) parts.push(activeArea);
     if (fromDate && toDate) parts.push(`${short(fromDate)}–${short(toDate)}`);
     else if (fromDate) parts.push(`from ${short(fromDate)}`);
     else if (toDate) parts.push(`through ${short(toDate)}`);
     return parts.length ? parts.join(" · ") : "all time";
-  }, [statusFilter, fromDate, toDate]);
+  }, [statusFilter, activeArea, fromDate, toDate]);
 
   // Tap a status to add it to / remove it from the selection. Ticking every
   // status is the same as All, so it folds back to the empty (All) state.
@@ -219,7 +264,16 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
     const statusPart = statusFilter.length
       ? STATUS_ORDER.filter((s) => statusFilter.includes(s)).join("+")
       : "all";
-    download(`navera-orders-${statusPart}-${range}-${stamp}.csv`, toCSV(shown, timezone));
+    // Only named when a community is picked, so an unfiltered export keeps the
+    // filename it always had.
+    const areaSlug = activeArea
+      ? activeArea.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+      : "";
+    const areaPart = areaSlug ? `-${areaSlug}` : "";
+    download(
+      `navera-orders-${statusPart}-${range}${areaPart}-${stamp}.csv`,
+      toCSV(shown, timezone)
+    );
   }
 
   return (
@@ -356,6 +410,22 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
         )}
       </div>
 
+      <div className="field ad-orders-community">
+        <label htmlFor="orders-community">Community</label>
+        <select
+          id="orders-community"
+          value={activeArea}
+          onChange={(e) => setAreaFilter(e.target.value)}
+        >
+          <option value="">All communities ({areaFacets.total})</option>
+          {areaFacets.options.map(([name, n]) => (
+            <option key={name} value={name}>
+              {name} ({n})
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="ad-filters" role="group" aria-label="Filter by status">
         <button
           type="button"
@@ -380,13 +450,13 @@ export default function AllOrders({ orders, settings, loading, onRefresh }) {
 
       {shown.length === 0 ? (
         <div className="ad-empty">
-          No orders match this filter{hasRange ? " and date range" : ""}.
+          No orders match these filters.
         </div>
       ) : (
         <div className="ad-tablewrap">
           <table className="ad-table">
             <caption className="sr-only">
-              Orders filtered by status and delivery date range.
+              Orders filtered by delivery date range, community and status.
             </caption>
             <thead>
               <tr>

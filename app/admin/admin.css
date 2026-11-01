@@ -1502,6 +1502,17 @@
   text-transform: uppercase;
   font-weight: 600;
 }
+/* All Orders' community picker: the Customers view's look, sitting between the
+   date range above it and the status chips below. The select itself stays the
+   shared .field one (16px, ~50px tall) — nothing here touches .field. */
+.ad-orders-community.field { margin: 12px 0 14px; max-width: 420px; }
+.ad-orders-community.field label {
+  margin-bottom: 6px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
 .ad-cu-chiplabel {
   display: block;
   margin-bottom: 6px;
