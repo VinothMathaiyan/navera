@@ -103,6 +103,15 @@ export const SOURCE_LABEL = {
   weekly: "Weekly",
 };
 
+// The community an order card shows under the customer's name — the same value
+// the filter matches on, so the picker and the cards can never disagree about
+// who is in a community. Empty string when a customer has none.
+const areaOf = (o) => o.customer?.area?.name ?? "";
+
+// Money still to collect on a live order. Samples are 'not_applicable' and
+// cancelled orders are not owed, so neither counts.
+const isOwed = (o) => isPending(o) && o.status !== "cancelled";
+
 /* Which message a status naturally goes with. This is the ONLY link between
    the two axes on an order card, and it is a suggestion in one direction only:
    arriving at a status offers the message, and sending a message never moves a
@@ -169,6 +178,9 @@ export default function AdminDashboard() {
   // A switch rather than a fifth tab — four already barely fit a 360px handset.
   const [allMode, setAllMode] = useState("orders");
   const [unpaidOnly, setUnpaidOnly] = useState(false);
+  // Community name, or "" for every community. Held by name and read off the
+  // day's orders, so it survives flipping between delivery dates.
+  const [areaFilter, setAreaFilter] = useState("");
 
   // localStorage can only be read after mount, or server and client HTML differ.
   useEffect(() => {
@@ -331,17 +343,45 @@ export default function AdminDashboard() {
   // Samples are excluded from revenue and from paneer sold, and reported as
   // their own acquisition figure. See ./payments.js for why that separation is
   // the whole point.
-  const unpaidCount = useMemo(
-    () => orders.filter((o) => isPending(o) && o.status !== "cancelled").length,
-    [orders]
+
+  // The community filter narrows the LIST of order cards below and nothing
+  // else. `forecast` above is computed from `orders`, the whole day, and must
+  // stay that way: it is the number milk is bought from, and a figure for one
+  // apartment would under-buy for the rest.
+  const areaOrders = useMemo(
+    () => (areaFilter ? orders.filter((o) => areaOf(o) === areaFilter) : orders),
+    [orders, areaFilter]
   );
+  const unpaidCount = useMemo(() => areaOrders.filter(isOwed).length, [areaOrders]);
   const shownOrders = useMemo(
-    () =>
-      unpaidOnly
-        ? orders.filter((o) => isPending(o) && o.status !== "cancelled")
-        : orders,
-    [orders, unpaidOnly]
+    () => (unpaidOnly ? areaOrders.filter(isOwed) : areaOrders),
+    [areaOrders, unpaidOnly]
   );
+
+  // The picker's options come from the day's own orders, so every community
+  // listed has someone on it. The counts follow the Unpaid chip — "how many
+  // in this community, given what else I've picked" — and not the community
+  // choice itself. The chosen community is always kept in the list, at 0 if
+  // the date has none, so flipping to a quiet day doesn't blank the picker.
+  const areaFacets = useMemo(() => {
+    const tally = new Map();
+    for (const o of orders) {
+      const n = areaOf(o);
+      if (n && !tally.has(n)) tally.set(n, 0);
+    }
+    if (areaFilter && !tally.has(areaFilter)) tally.set(areaFilter, 0);
+    let total = 0;
+    for (const o of orders) {
+      if (unpaidOnly && !isOwed(o)) continue;
+      total += 1;
+      const n = areaOf(o);
+      if (n) tally.set(n, tally.get(n) + 1);
+    }
+    return {
+      total,
+      options: [...tally.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+    };
+  }, [orders, unpaidOnly, areaFilter]);
 
   /* ------------------------------------------------ render */
 
@@ -623,6 +663,31 @@ export default function AdminDashboard() {
             </button>
           </div>
 
+          <div className="field ad-orders-community">
+            <label htmlFor="dash-community">Community</label>
+            <select
+              id="dash-community"
+              value={areaFilter}
+              onChange={(e) => setAreaFilter(e.target.value)}
+            >
+              <option value="">All communities ({areaFacets.total})</option>
+              {areaFacets.options.map(([name, n]) => (
+                <option key={name} value={name}>
+                  {name} ({n})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Said out loud, because the figures above are the whole day and
+              a filtered list under them reads as though they were too. */}
+          {areaFilter && (
+            <p className="ad-note">
+              Showing {areaFilter} only. The production figures above still
+              cover every community for the day.
+            </p>
+          )}
+
           {/* Samples carry payment_status 'not_applicable', so they correctly
               drop out of the unpaid view: there is nothing to collect. */}
           <div className="ad-filters" role="group" aria-label="Filter orders">
@@ -632,7 +697,7 @@ export default function AdminDashboard() {
               aria-pressed={!unpaidOnly}
               onClick={() => setUnpaidOnly(false)}
             >
-              All ({orders.length})
+              All ({areaOrders.length})
             </button>
             <button
               type="button"
@@ -655,7 +720,11 @@ export default function AdminDashboard() {
               than sitting in the first grid cell. */}
           {!loading && orders.length > 0 && shownOrders.length === 0 && (
             <div className="ad-empty">
-              Everything for {date ? shortDate(date) : "this date"} is paid for.
+              {areaOrders.length === 0
+                ? `No orders from ${areaFilter} for ${date ? shortDate(date) : "this date"}.`
+                : `Everything${areaFilter ? ` from ${areaFilter}` : ""} for ${
+                    date ? shortDate(date) : "this date"
+                  } is paid for.`}
             </div>
           )}
 
