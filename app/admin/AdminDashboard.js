@@ -1706,6 +1706,35 @@ function OrderCard({ order, settings, today, onStatusChanged, onExpired, onEdit 
       });
   }
 
+  // Cancel deletes the order for good (founder decision, 2026-11-03: a
+  // cancelled order should not stay in the database). order_items go with it by
+  // ON DELETE CASCADE. `return=representation` is what makes this checkable: a
+  // DELETE that matches nothing answers 204 exactly like one that worked, so
+  // without the returned id an already-gone order — or one RLS refused — would
+  // look like success and the card would just sit there.
+  function cancelOrder() {
+    setStatusBusy(true);
+    setError(null);
+    db(`orders?id=eq.${order.id}&select=id`, {
+      method: "DELETE",
+      prefer: "return=representation",
+    })
+      .then((rows) => {
+        if (!rows || rows.length === 0) {
+          setError("Nothing was deleted — this order may already be gone. Refreshing the list.");
+        }
+        onStatusChanged?.();
+      })
+      .catch((e) => {
+        if (e instanceof SessionExpired) onExpired();
+        else setError(e.message);
+      })
+      .finally(() => {
+        setStatusBusy(false);
+        setConfirmCancel(false);
+      });
+  }
+
   /* Payment. Writes orders.payment_status and orders.payment_method only —
      never orders.status, and never the other way round. paid_at is stamped by
      the database trigger, and cleared by it on an undo, so the age of an
@@ -1887,8 +1916,10 @@ function OrderCard({ order, settings, today, onStatusChanged, onExpired, onEdit 
       {order.status === "cancelled" ? (
         <>
           <div className="ad-order-cancelled">Cancelled — not counted in the forecast</div>
-          {/* An undo for a mis-tap. Cancel is confirmed before it happens, but
-              a destructive action with no way back is its own kind of trap. */}
+          {/* Legacy rows only. Cancel deletes the order now, so nothing makes a
+              cancelled one any more — but if one ever turns up (a row set by
+              hand in the database, say) it must not render as a live order, and
+              it can still be put back. */}
           <div className="ad-order-actions">
             <button
               type="button"
@@ -2058,18 +2089,18 @@ function OrderCard({ order, settings, today, onStatusChanged, onExpired, onEdit 
           {confirmCancel ? (
             <div className="ad-confirm" role="alert">
               <span>
-                Cancel {order.reference}? The order stays on record — nothing
-                is deleted — but it stops counting toward tomorrow&apos;s milk
-                and paneer. You can restore it any time.
+                Cancel {order.reference}? This deletes the order for good — it
+                can&apos;t be restored. It also stops counting toward
+                tomorrow&apos;s milk and paneer.
               </span>
               <div className="ad-confirm-actions">
                 <button
                   type="button"
                   className="ad-step is-danger"
                   disabled={statusBusy}
-                  onClick={() => setStatus("cancelled")}
+                  onClick={cancelOrder}
                 >
-                  {statusBusy ? "Cancelling…" : "Yes, cancel"}
+                  {statusBusy ? "Deleting…" : "Yes, cancel and delete"}
                 </button>
                 <button
                   type="button"

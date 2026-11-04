@@ -610,7 +610,19 @@ jobs is what made it unpredictable.
 
 - **STATUS is the only thing on the card that writes `orders.status`.** One
   row, advance and back, along `confirmed → preparing → dispatched →
-  delivered`. Cancel is separate and keeps its own confirmation and undo.
+  delivered`. Cancel is separate, and **since 2026-11-03 it deletes the order
+  permanently** — founder decision: a cancelled order should not stay in the
+  database. It keeps its two-step confirmation, which now says plainly that the
+  order cannot be restored; there is no undo. It is a `DELETE` of the `orders`
+  row (`order_items` follow by `ON DELETE CASCADE`) that asks PostgREST to
+  return the deleted id, because a delete matching nothing answers `204` just
+  like one that worked and would look like success. The `cancelled` status
+  still exists in the schema and a legacy cancelled row still renders with a
+  Restore button, but nothing creates one any more. Side effects worth knowing:
+  a deleted order no longer counts toward `max_orders_per_phone_per_day`, and
+  the customer's private link to it opens the generic "This link didn't open"
+  page. The 13 cancelled orders that existed (NAV-007 … NAV-125) were deleted
+  the same day, along with the one customer whose only order was cancelled.
 - **MESSAGE writes nothing, ever.** One WhatsApp button opening a menu of four
   templates — Confirm, Dispatch, Reminder (§21), Feedback (§27). All four are
   plain anchors to `wa.me`. **Dispatch no longer sets `status='dispatched'`.**
